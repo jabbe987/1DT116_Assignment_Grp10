@@ -45,6 +45,76 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 void Ped::Model::tick()
 {
 	// EDIT HERE FOR ASSIGNMENT 1
+
+
+	/*1) retrieve each agent (getX, getY)
+	2) calculate its next desired position (getDesiredX, getDesiredY)
+	3) set its position to the calculated desired one. (setX, setY)
+	
+	DONT USE MOVE FUNCTION
+
+	Two classes: Tagent class and Model class
+	Here you need to implement two versions, one
+	that uses OpenMP and one that uses C++ Threads.*/ 
+
+//#pragma omp parallel for default(none) schedule(dynamic) 
+//#pragma omp parallel for default(none) shared(agents) private(agent) schedule(dynamic, 10)
+
+	implementation = PTHREAD;//OMP OR PTHREAD
+	
+
+    if (implementation == OMP) {
+        omp_set_num_threads(4);
+		size_t numThreads = omp_get_num_threads();
+		std::cout << "[OMP MODE] Running with " << numThreads << " threads." << std::endl;
+
+		#pragma omp parallel for
+        for (size_t i = 0; i < agents.size(); i++) {
+            agents[i]->computeNextDesiredPosition();
+            agents[i]->setX(agents[i]->getDesiredX());
+            agents[i]->setY(agents[i]->getDesiredY());
+        }
+    }
+    else if (implementation == PTHREAD) {
+        //size_t numThreads = std::thread::hardware_concurrency();
+		int numThreads = 5;
+		//std::cout << "[PTHREAD MODE] Running with " << numThreads << " threads." << std::endl;
+
+        size_t numAgents = agents.size();
+        std::vector<std::thread> threads;
+		
+
+        auto worker = [&](size_t start, size_t end) {
+            for (size_t i = start; i < end; i++) {
+                agents[i]->computeNextDesiredPosition();
+                agents[i]->setX(agents[i]->getDesiredX());
+                agents[i]->setY(agents[i]->getDesiredY());
+            }
+        };
+
+        size_t chunkSize = (numAgents + numThreads - 1) / numThreads;
+
+        for (size_t i = 0; i < numThreads; i++) {
+            size_t start = i * chunkSize;
+            size_t end = std::min(start + chunkSize, numAgents);
+            if (start < numAgents) {
+                threads.push_back(std::thread(worker, start, end));
+            }
+        }
+
+        for (auto& t : threads) {
+            t.join();
+        }
+    }
+    else {  // Default to serial
+		std::cout << "[SERIAL MODE] Running with 1 thread." << std::endl;
+        for (Ped::Tagent* agent : agents) {
+            agent->computeNextDesiredPosition();
+            agent->setX(agent->getDesiredX());
+            agent->setY(agent->getDesiredY());
+        }
+}
+
 }
 
 ////////////
