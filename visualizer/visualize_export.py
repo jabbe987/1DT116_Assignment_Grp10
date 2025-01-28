@@ -4,6 +4,7 @@ import struct
 import sys
 import numpy as np
 import matplotlib
+matplotlib.use('TkAgg')  # Use TkAgg backend to avoid segmentation fault
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button, CheckButtons
 import matplotlib.colors as mcolors

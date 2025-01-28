@@ -60,15 +60,13 @@ void Ped::Model::tick()
 //#pragma omp parallel for default(none) schedule(dynamic) 
 //#pragma omp parallel for default(none) shared(agents) private(agent) schedule(dynamic, 10)
 
-	implementation = PTHREAD;//OMP OR PTHREAD
+	implementation = OMP;//OMP OR PTHREAD
 	
 
     if (implementation == OMP) {
-        omp_set_num_threads(4);
-		size_t numThreads = omp_get_num_threads();
-		std::cout << "[OMP MODE] Running with " << numThreads << " threads." << std::endl;
+        omp_set_num_threads(6);
 
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(dynamic)
         for (size_t i = 0; i < agents.size(); i++) {
             agents[i]->computeNextDesiredPosition();
             agents[i]->setX(agents[i]->getDesiredX());

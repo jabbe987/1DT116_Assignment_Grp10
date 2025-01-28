@@ -40,3 +40,9 @@
 
 # binary file
 demo/demo
+
+# VENV
+.venv/
+
+# Ignore generated export trace files
+export_trace.bin
