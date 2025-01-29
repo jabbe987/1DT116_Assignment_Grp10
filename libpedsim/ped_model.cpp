@@ -60,13 +60,13 @@ void Ped::Model::tick()
 //#pragma omp parallel for default(none) schedule(dynamic) 
 //#pragma omp parallel for default(none) shared(agents) private(agent) schedule(dynamic, 10)
 
-	implementation = OMP;//OMP OR PTHREAD
-	
+	// std::cout << "i: " << implementation << std::endl;
 
     if (implementation == OMP) {
-        omp_set_num_threads(6);
-
-		#pragma omp parallel for schedule(dynamic)
+		
+        omp_set_num_threads(16);
+		
+		#pragma omp parallel for schedule(static)
         for (size_t i = 0; i < agents.size(); i++) {
             agents[i]->computeNextDesiredPosition();
             agents[i]->setX(agents[i]->getDesiredX());
@@ -74,38 +74,37 @@ void Ped::Model::tick()
         }
     }
     else if (implementation == PTHREAD) {
-        //size_t numThreads = std::thread::hardware_concurrency();
-		int numThreads = 5;
-		//std::cout << "[PTHREAD MODE] Running with " << numThreads << " threads." << std::endl;
+		int numThreads = 4;
+		size_t numAgents = agents.size();
+		std::vector<std::thread> threads;
 
-        size_t numAgents = agents.size();
-        std::vector<std::thread> threads;
-		
+		// Determine workload boundaries for each thread
+		size_t chunkSize = numAgents / numThreads;  // Static chunk size
+		size_t remainder = numAgents % numThreads;  // Handles edge case when numAgents is not divisible
 
-        auto worker = [&](size_t start, size_t end) {
-            for (size_t i = start; i < end; i++) {
-                agents[i]->computeNextDesiredPosition();
-                agents[i]->setX(agents[i]->getDesiredX());
-                agents[i]->setY(agents[i]->getDesiredY());
-            }
-        };
+		// Worker function: Each thread gets a pre-determined chunk
+		auto worker = [&](int threadID) {
+			size_t start = threadID * chunkSize;
+        	size_t end = (threadID == numThreads - 1) ? numAgents : start + chunkSize;
+        
+			for (size_t i = start; i < end; i++) {
+				agents[i]->computeNextDesiredPosition();
+				agents[i]->setX(agents[i]->getDesiredX());
+				agents[i]->setY(agents[i]->getDesiredY());
+			}
+		};
 
-        size_t chunkSize = (numAgents + numThreads - 1) / numThreads;
+		// Launch threads
+		for (int i = 0; i < numThreads; i++) {
+			threads.emplace_back(worker, i);
+		}
 
-        for (size_t i = 0; i < numThreads; i++) {
-            size_t start = i * chunkSize;
-            size_t end = std::min(start + chunkSize, numAgents);
-            if (start < numAgents) {
-                threads.push_back(std::thread(worker, start, end));
-            }
-        }
-
-        for (auto& t : threads) {
-            t.join();
-        }
-    }
-    else {  // Default to serial
-		std::cout << "[SERIAL MODE] Running with 1 thread." << std::endl;
+		// Join threads
+		for (auto& t : threads) {
+			t.join();
+    	}
+	}
+    else if (implementation == SEQ) {  // Default to serial
         for (Ped::Tagent* agent : agents) {
             agent->computeNextDesiredPosition();
             agent->setX(agent->getDesiredX());
