@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <omp.h>
 #include <thread>
+#include <atomic>
 
 #ifndef NOCDUA
 #include "cuda_testkernel.h"
@@ -64,7 +65,7 @@ void Ped::Model::tick()
 
     if (implementation == OMP) {
 		
-        omp_set_num_threads(16);
+        omp_set_num_threads(6);
 		
 		#pragma omp parallel for schedule(static)
         for (size_t i = 0; i < agents.size(); i++) {
@@ -82,22 +83,25 @@ void Ped::Model::tick()
 		size_t chunkSize = numAgents / numThreads;  // Static chunk size
 		size_t remainder = numAgents % numThreads;  // Handles edge case when numAgents is not divisible
 
+		size_t start = 0;
+		
 		// Worker function: Each thread gets a pre-determined chunk
-		auto worker = [&](int threadID) {
-			size_t start = threadID * chunkSize;
-        	size_t end = (threadID == numThreads - 1) ? numAgents : start + chunkSize;
-        
-			for (size_t i = start; i < end; i++) {
-				agents[i]->computeNextDesiredPosition();
-				agents[i]->setX(agents[i]->getDesiredX());
-				agents[i]->setY(agents[i]->getDesiredY());
-			}
-		};
+		auto worker = [&](size_t start, size_t end) {
+            for (size_t i = start; i < end; i++) {
+                agents[i]->computeNextDesiredPosition();
+                agents[i]->setX(agents[i]->getDesiredX());
+                agents[i]->setY(agents[i]->getDesiredY());
+            }
+        };
 
 		// Launch threads
-		for (int i = 0; i < numThreads; i++) {
-			threads.emplace_back(worker, i);
-		}
+		for (size_t i = 0; i < numThreads; i++) {
+            size_t end = start + chunkSize + (i < remainder ? 1 : 0); // Distribute extra agents to first few threads
+            if (start < numAgents) {  // Avoid empty threads
+                threads.push_back(std::thread(worker, start, end));
+            }
+            start = end;
+        }
 
 		// Join threads
 		for (auto& t : threads) {
