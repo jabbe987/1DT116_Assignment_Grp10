@@ -45,24 +45,6 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 
 void Ped::Model::tick()
 {
-	// EDIT HERE FOR ASSIGNMENT 1
-
-
-	/*1) retrieve each agent (getX, getY)
-	2) calculate its next desired position (getDesiredX, getDesiredY)
-	3) set its position to the calculated desired one. (setX, setY)
-	
-	DONT USE MOVE FUNCTION
-
-	Two classes: Tagent class and Model class
-	Here you need to implement two versions, one
-	that uses OpenMP and one that uses C++ Threads.*/ 
-
-//#pragma omp parallel for default(none) schedule(dynamic) 
-//#pragma omp parallel for default(none) shared(agents) private(agent) schedule(dynamic, 10)
-
-	// std::cout << "i: " << implementation << std::endl;
-
     if (implementation == OMP) {
 		
         omp_set_num_threads(6);
@@ -80,8 +62,8 @@ void Ped::Model::tick()
 		std::vector<std::thread> threads;
 
 		// Determine workload boundaries for each thread
-		size_t chunkSize = numAgents / numThreads;  // Static chunk size
-		size_t remainder = numAgents % numThreads;  // Handles edge case when numAgents is not divisible
+		size_t chunkSize = numAgents / numThreads;
+		size_t remainder = numAgents % numThreads;
 
 		size_t start = 0;
 		
