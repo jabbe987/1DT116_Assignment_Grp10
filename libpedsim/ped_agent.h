@@ -52,7 +52,7 @@ namespace Ped {
 		Tagent() {};
 
 		// The agent's current position
-		int x;
+		int x; //tuple
 		int y;
 
 		// The agent's desired next position
@@ -60,10 +60,10 @@ namespace Ped {
 		int desiredPositionY;
 
 		// The current destination (may require several steps to reach)
-		Twaypoint* destination;
+		Twaypoint* destination; //needed for calculating next step
 
 		// The last destination
-		Twaypoint* lastDestination;
+		Twaypoint* lastDestination; 
 
 		// The queue of all destinations that this agent still has to visit
 		deque<Twaypoint*> waypoints;

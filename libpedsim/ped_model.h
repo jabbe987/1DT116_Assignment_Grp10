@@ -31,11 +31,12 @@ namespace Ped{
 		// Sets everything up
 		void setup(std::vector<Tagent*> agentsInScenario, std::vector<Twaypoint*> destinationsInScenario,IMPLEMENTATION implementation);
 		
+		
 		// Coordinates a time step in the scenario: move all agents by one step (if applicable).
 		void tick();
 
 		// Returns the agents of this scenario
-		const std::vector<Tagent*>& getAgents() const { return agents; };
+		//const std::vector<Tagent*>& getAgents() const { return agents; };
 
 		// Adds an agent to the tree structure
 		void placeAgent(const Ped::Tagent *a);
@@ -55,8 +56,16 @@ namespace Ped{
 		// agents (Assignment 1)
 		IMPLEMENTATION implementation;
 
+		std::vector<int> posX;
+        std::vector<int> posY;
+        std::vector<int> desiredPosX;
+        std::vector<int> desiredPosY;
+
+		void computeNextDesiredPositionSIMD();
+
 		// The agents in this scenario
-		std::vector<Tagent*> agents;
+		std::vector<Tagent*> agents; //before SIMD
+		
 
 		// The waypoints in this scenario
 		std::vector<Twaypoint*> destinations;

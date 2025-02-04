@@ -14,6 +14,8 @@
 #include <omp.h>
 #include <thread>
 #include <atomic>
+#include <immintrin.h>
+#include <xmmintrin.h>
 
 #ifndef NOCDUA
 #include "cuda_testkernel.h"
@@ -29,11 +31,18 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 #else
     std::cout << "Not compiled for CUDA" << std::endl;
 #endif
-
+	for (const auto& agent : agentsInScenario) {
+        posX.push_back(agent->getX());
+        posY.push_back(agent->getY());
+        desiredPosX.push_back(agent->getDesiredX());
+        desiredPosY.push_back(agent->getDesiredY());
+    }
+	// destinations = destinationsInScenario;
+    this->implementation = implementation;
 	// Set 
 	agents = std::vector<Ped::Tagent*>(agentsInScenario.begin(), agentsInScenario.end());
 
-	// Set up destinations
+	// // Set up destinations
 	destinations = std::vector<Ped::Twaypoint*>(destinationsInScenario.begin(), destinationsInScenario.end());
 
 	// Sets the chosen implemenation. Standard in the given code is SEQ
@@ -47,58 +56,109 @@ void Ped::Model::tick()
 {
     if (implementation == OMP) {
 		
-        omp_set_num_threads(6);
+        // omp_set_num_threads(6);
 		
-		#pragma omp parallel for schedule(static)
-        for (size_t i = 0; i < agents.size(); i++) {
-            agents[i]->computeNextDesiredPosition();
-            agents[i]->setX(agents[i]->getDesiredX());
-            agents[i]->setY(agents[i]->getDesiredY());
-        }
+		// #pragma omp parallel for schedule(static)
+        // for(size_t i = 0; i < agents.size(); i++) {
+        //     agents[i]->computeNextDesiredPosition();
+        //     agents[i]->setX(agents[i]->getDesiredX());
+        //     agents[i]->setY(agents[i]->getDesiredY());
+        // }
     }
     else if (implementation == PTHREAD) {
-		int numThreads = 4;
-		size_t numAgents = agents.size();
-		std::vector<std::thread> threads;
+		// int numThreads = 4;
+		// size_t numAgents = agents.size();
+		// std::vector<std::thread> threads;
 
-		// Determine workload boundaries for each thread
-		size_t chunkSize = numAgents / numThreads;
-		size_t remainder = numAgents % numThreads;
+		// // Determine workload boundaries for each thread
+		// size_t chunkSize = numAgents / numThreads;
+		// size_t remainder = numAgents % numThreads;
 
-		size_t start = 0;
+		// size_t start = 0;
 		
-		// Worker function: Each thread gets a pre-determined chunk
-		auto worker = [&](size_t start, size_t end) {
-            for (size_t i = start; i < end; i++) {
-                agents[i]->computeNextDesiredPosition();
-                agents[i]->setX(agents[i]->getDesiredX());
-                agents[i]->setY(agents[i]->getDesiredY());
-            }
-        };
+		// // Worker function: Each thread gets a pre-determined chunk
+		// auto worker = [&](size_t start, size_t end) {
+        //     for (size_t i = start; i < end; i++) {
+        //         agents[i]->computeNextDesiredPosition();
+        //         agents[i]->setX(agents[i]->getDesiredX());
+        //         agents[i]->setY(agents[i]->getDesiredY());
+        //     }
+        // };
 
-		// Launch threads
-		for (size_t i = 0; i < numThreads; i++) {
-            size_t end = start + chunkSize + (i < remainder ? 1 : 0); // Distribute extra agents to first few threads
-            if (start < numAgents) {  // Avoid empty threads
-                threads.push_back(std::thread(worker, start, end));
-            }
-            start = end;
-        }
+		// // Launch threads
+		// for (size_t i = 0; i < numThreads; i++) {
+        //     size_t end = start + chunkSize + (i < remainder ? 1 : 0); // Distribute extra agents to first few threads
+        //     if (start < numAgents) {  // Avoid empty threads
+        //         threads.push_back(std::thread(worker, start, end));
+        //     }
+        //     start = end;
+        // }
 
-		// Join threads
-		for (auto& t : threads) {
-			t.join();
-    	}
+		// // Join threads
+		// for (auto& t : threads) {
+		// 	t.join();
+    	// }
 	}
+	/*
     else if (implementation == SEQ) {  // Default to serial
         for (Ped::Tagent* agent : agents) {
             agent->computeNextDesiredPosition();
             agent->setX(agent->getDesiredX());
             agent->setY(agent->getDesiredY());
-        }
+        }*/
+	else if (implementation == SEQ) {  // simd_avx implementation
+		std::cout << "Inside SEQ implementation" << std::endl;
+        for (int i = 0; i<posX.size();i+=8) {
+			std::cout << "posX[" << i << "] = " << posX[i] << std::endl;
+			__m256i x = _mm256_loadu_si256((__m256i*)&posX[i]);
+        	__m256i y = _mm256_loadu_si256((__m256i*)&posY[i]);
+			
+			// __m256 dx = _mm256_loadu_ps(&destinations[i]->getx());
+			// __m256 dy = _mm256_loadu_ps(&destinations[i]->gety());
+			//alignas(32) float x[8], y[8], dx[8], dy[8];
+
+			// Load agent data into arrays
+			// if we have trouble we might need this solution below
+			int dx[8], dy[8]; 
+			for (int j = 0; j < 8; j++) {
+				dx[j] = destinations[i+j]->getx();
+				dy[j] = destinations[i+j]->gety();
+			}
+			__m256i destX = _mm256_loadu_si256((__m256i*)dx);
+			__m256i destY = _mm256_loadu_si256((__m256i*)dy);
+			
+
+			//Calculate distance to next waypoint m
+			__m256i diffX = _mm256_sub_epi32(x, destX);
+			__m256i diffY = _mm256_sub_epi32(y, destY);
+			__m256i mulY = _mm256_mul_epi32(diffY,diffY);
+			__m256i mulX = _mm256_mul_epi32(diffX,diffX);
+			__m256i addxy = _mm256_add_epi32(mulX, mulY);
+ 			__m256 len = _mm256_sqrt_ps(_mm256_cvtepi32_ps(addxy));
+
+			__m256i xdiffx = _mm256_add_epi32(diffX, x);
+			__m256 desPosX = _mm256_div_ps(_mm256_cvtepi32_ps(xdiffx), len);
+			__m256i ydiffy = _mm256_add_epi32(diffY, y);
+			__m256 desPosY = _mm256_div_ps(_mm256_cvtepi32_ps(ydiffy), len);
+			
+			_mm256_storeu_ps((float*)&posX, desPosX);
+			_mm256_storeu_ps((float*)&posY, desPosY);
+
+			/*agent->computeNextDesiredPosition();
+            agent->setX(agent->getDesiredX());
+            agent->setY(agent->getDesiredY());*/
+			
+        }   
+	
 }
 
 }
+
+
+
+
+
+
 
 ////////////
 /// Everything below here relevant for Assignment 3.
