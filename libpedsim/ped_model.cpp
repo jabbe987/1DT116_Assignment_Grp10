@@ -8,6 +8,7 @@
 #include "ped_model.h"
 #include "ped_waypoint.h"
 #include "ped_model.h"
+#include "ped_agents.h"
 #include <iostream>
 #include <stack>
 #include <algorithm>
@@ -31,20 +32,17 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 #else
     std::cout << "Not compiled for CUDA" << std::endl;
 #endif
-	for (const auto& agent : agentsInScenario) {
-        posX.push_back(agent->getX());
-        posY.push_back(agent->getY());
-        desiredPosX.push_back(agent->getDesiredX());
-        desiredPosY.push_back(agent->getDesiredY());
-    }
-	// destinations = destinationsInScenario;
-    this->implementation = implementation;
-	// Set 
-	agents = std::vector<Ped::Tagent*>(agentsInScenario.begin(), agentsInScenario.end());
-
-	// // Set up destinations
+	agent_old = std::vector<Ped::Tagent*>(agentsInScenario.begin(), agentsInScenario.end());
+	// Set up destinations
 	destinations = std::vector<Ped::Twaypoint*>(destinationsInScenario.begin(), destinationsInScenario.end());
 
+	Ped::Tagents* agents = new Ped::Tagents(agentsInScenario.size());
+    for (const auto& a : agent_old) {
+        agents->addAgent(a->getX(), a->getY(), a->getWaypoints()); // if not good take from agent_old
+    }
+
+	// destinations = destinationsInScenario;
+	
 	// Sets the chosen implemenation. Standard in the given code is SEQ
 	this->implementation = implementation;
 
@@ -108,42 +106,8 @@ void Ped::Model::tick()
         }*/
 	else if (implementation == SEQ) {  // simd_avx implementation
 		std::cout << "Inside SEQ implementation" << std::endl;
-        for (int i = 0; i<posX.size();i+=8) {
-			std::cout << "posX[" << i << "] = " << posX[i] << std::endl;
-			__m256i x = _mm256_loadu_si256((__m256i*)&posX[i]);
-        	__m256i y = _mm256_loadu_si256((__m256i*)&posY[i]);
+			//compute next blablabla
 			
-			// __m256 dx = _mm256_loadu_ps(&destinations[i]->getx());
-			// __m256 dy = _mm256_loadu_ps(&destinations[i]->gety());
-			//alignas(32) float x[8], y[8], dx[8], dy[8];
-
-			// Load agent data into arrays
-			// if we have trouble we might need this solution below
-			int dx[8], dy[8]; 
-			for (int j = 0; j < 8; j++) {
-				dx[j] = destinations[i+j]->getx();
-				dy[j] = destinations[i+j]->gety();
-			}
-			__m256i destX = _mm256_loadu_si256((__m256i*)dx);
-			__m256i destY = _mm256_loadu_si256((__m256i*)dy);
-			
-
-			//Calculate distance to next waypoint m
-			__m256i diffX = _mm256_sub_epi32(x, destX);
-			__m256i diffY = _mm256_sub_epi32(y, destY);
-			__m256i mulY = _mm256_mul_epi32(diffY,diffY);
-			__m256i mulX = _mm256_mul_epi32(diffX,diffX);
-			__m256i addxy = _mm256_add_epi32(mulX, mulY);
- 			__m256 len = _mm256_sqrt_ps(_mm256_cvtepi32_ps(addxy));
-
-			__m256i xdiffx = _mm256_add_epi32(diffX, x);
-			__m256 desPosX = _mm256_div_ps(_mm256_cvtepi32_ps(xdiffx), len);
-			__m256i ydiffy = _mm256_add_epi32(diffY, y);
-			__m256 desPosY = _mm256_div_ps(_mm256_cvtepi32_ps(ydiffy), len);
-			
-			_mm256_storeu_ps((float*)&posX, desPosX);
-			_mm256_storeu_ps((float*)&posY, desPosY);
-
 			/*agent->computeNextDesiredPosition();
             agent->setX(agent->getDesiredX());
             agent->setY(agent->getDesiredY());*/
@@ -152,7 +116,6 @@ void Ped::Model::tick()
 	
 }
 
-}
 
 
 

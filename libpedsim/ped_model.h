@@ -16,6 +16,7 @@
 #include <set>
 
 #include "ped_agent.h"
+#include "ped_agents.h"
 
 namespace Ped{
 	class Tagent;
@@ -36,7 +37,7 @@ namespace Ped{
 		void tick();
 
 		// Returns the agents of this scenario
-		//const std::vector<Tagent*>& getAgents() const { return agents; };
+		const std::vector<Tagent*>& getAgents() const { return agents; };
 
 		// Adds an agent to the tree structure
 		void placeAgent(const Ped::Tagent *a);
@@ -56,15 +57,8 @@ namespace Ped{
 		// agents (Assignment 1)
 		IMPLEMENTATION implementation;
 
-		std::vector<int> posX;
-        std::vector<int> posY;
-        std::vector<int> desiredPosX;
-        std::vector<int> desiredPosY;
-
-		void computeNextDesiredPositionSIMD();
-
 		// The agents in this scenario
-		std::vector<Tagent*> agents; //before SIMD
+		std::vector<Tagent*> agent_old; //before SIMD
 		
 
 		// The waypoints in this scenario

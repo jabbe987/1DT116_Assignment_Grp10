@@ -40,10 +40,15 @@ namespace Ped {
 		// Update the position according to get closer
 		// to the current destination
 		void computeNextDesiredPosition();
+		void computeNextDesiredPositionSIMD();
 
 		// Position of agent defined by x and y
 		int getX() const { return x; };
 		int getY() const { return y; };
+
+		std::vector<Ped::Twaypoint*> getWaypoints() const {
+    		return std::vector<Ped::Twaypoint*>(waypoints.begin(), waypoints.end());
+		}
 
 		// Adds a new waypoint to reach for this agent
 		void addWaypoint(Twaypoint* wp);
