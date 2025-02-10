@@ -36,12 +36,29 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 	// Set up destinations
 	destinations = std::vector<Ped::Twaypoint*>(destinationsInScenario.begin(), destinationsInScenario.end());
 	
-	this->agents = new Ped::Tagents(agentsInScenario.size());
+	if (!agents) {  // Prevent double allocation
+		std::cout << "Initialize" << std::endl;
+		this->agents = new Ped::Tagents(agentsInScenario.size());
+	}
+	
+	// std::cout << "blabla: " << agentsInScenario.size() << std::endl;
+	// std::cout << "blabla: " << numAgents << std::endl;
+	std::cout << "Number of agents 1111: " << agent_old.size() << std::endl;
     for (const auto& a : agent_old) {
-        agents->addAgent(a->getX(), a->getY(), a->getWaypoints()); // if not good take from agent_old
+		// std::cout << "a->getX() : " << a->getX() << std::endl;
+		// std::cout << "a->getY() : " << a->getY() << std::endl;
+        this->agents->addAgent(a->getX(), a->getY(), a->getWaypoints()); // if not good take from agent_old
     }
+	std::cout << "Number of agents: " << this->agents->x.size() << std::endl;
 
-	// destinations = destinationsInScenario;
+
+	
+	/*for (size_t i = 0; i < agents->x.size(); ++i) {
+		std::cout << "Agent " << i << " - x: " << agents->x[i] << ", y: " << agents->y[i] << std::endl;
+	}*/
+
+	
+	// destinations = destinations	InScenario;
 	
 	// Sets the chosen implemenation. Standard in the given code is SEQ
 	this->implementation = implementation;
@@ -52,7 +69,25 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 
 void Ped::Model::tick()
 {
+	/*
+	std::cout << "Number of agents: " << agents->x.size() << std::endl;
+	std::cout << "Number of destinations: " << agents->destinations.size() << std::endl;
+	std::cout << "Number of agents: " << agent_old.size() << std::endl;
+	
+
+	/*std::cout << "Agents:" << std::endl;
+	for (const auto& agent : agent_old) {
+		std::cout << "Agent at (" << agent->getX() << ", " << agent->getY() << ")" << std::endl;
+	}
+
+	std::cout << "Destinations:" << std::endl;
+	for (const auto& destination : destinations) {
+		std::cout << "Destination at (" << destination->getX() << ", " << destination->getY() << ")" << std::endl;
+	}*/
     if (implementation == OMP) {
+		agents->computeNextDesiredPositions();
+		std::cout << "x pos: " << agents->x[100] <<std::endl;
+		std::cout << "x old: " << agent_old[100]->getX() <<std::endl;
 		
         // omp_set_num_threads(6);
 		
@@ -97,23 +132,25 @@ void Ped::Model::tick()
 		// 	t.join();
     	// }
 	}
-	/*
+	
     else if (implementation == SEQ) {  // Default to serial
-        for (Ped::Tagent* agent : agents) {
+        for (Ped::Tagent* agent : agent_old) {
             agent->computeNextDesiredPosition();
             agent->setX(agent->getDesiredX());
             agent->setY(agent->getDesiredY());
-        }*/
-	else if (implementation == SEQ) {  // simd_avx implementation
-		//std::cout << "Inside SEQ implementation" << std::endl;
-			//compute next blablabla
+        }
+	// else if (implementation == SEQ) {  // simd_avx implementation
+	// 	//std::cout << "Inside SEQ implementation" << std::endl;
+	// 		//compute next blablabla
 			
-			/*agent->computeNextDesiredPosition();
-            agent->setX(agent->getDesiredX());
-            agent->setY(agent->getDesiredY());*/
+	// 		agents->computeNextDesiredPositions();
+	// 		// std::cout << "Completed compute desired positions" << std::endl;
 			
-        }   
-	
+    //         /*agent->setX(agent->getDesiredX());
+    //         agent->setY(agent->getDesiredY());*/
+			
+    //     }   
+	}
 }
 
 

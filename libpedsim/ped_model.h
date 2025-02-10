@@ -50,6 +50,8 @@ namespace Ped{
 		int const * const * getHeatmap() const { return blurred_heatmap; };
 		int getHeatmapSize() const;
 
+		const Ped::Tagents* getAgentsSoA() const { return agents; }
+
 	private:
 
 		// Denotes which implementation (sequential, parallel implementations..)
@@ -59,7 +61,7 @@ namespace Ped{
 
 		// The agents in this scenario
 		std::vector<Tagent*> agent_old; //before SIMD
-		Ped::Tagents* agents; //with SIMD
+		Ped::Tagents* agents = nullptr; //with SIMD
 
 		// The waypoints in this scenario
 		std::vector<Twaypoint*> destinations;

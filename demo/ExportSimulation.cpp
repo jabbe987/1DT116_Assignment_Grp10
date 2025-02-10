@@ -19,13 +19,13 @@ ExportSimulation::~ExportSimulation() {
 
 void ExportSimulation::serialize()
 {
-    const std::vector<Ped::Tagent*>& agents = model.getAgents();
-    size_t num_agents = agents.size();
+    const Ped::Tagents* agents = model.getAgentsSoA();
+    size_t num_agents = agents->x.size();
     file.write(reinterpret_cast<const char*>(&num_agents), sizeof(num_agents));
 
-    for (const auto &agent : agents) {
-        int16_t x = static_cast<int16_t>(agent->getX());
-        int16_t y = static_cast<int16_t>(agent->getY());
+    for (size_t i = 0; i < num_agents; i++) {
+        int16_t x = static_cast<int16_t>(agents->x[i]);
+        int16_t y = static_cast<int16_t>(agents->x[i]);
 
         file.write(reinterpret_cast<const char *>(&x), sizeof(x));
         file.write(reinterpret_cast<const char *>(&y), sizeof(y));
