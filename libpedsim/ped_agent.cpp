@@ -25,6 +25,10 @@ void Ped::Tagent::init(int posX, int posY) {
 	destination = NULL;
 	lastDestination = NULL;
 }
+int Ped::Tagent::getDesiredX() const { return desiredPositionX; }
+int Ped::Tagent::getDesiredY() const { return desiredPositionY; }
+void Ped::Tagent::setX(int newX) { x = newX; }
+void Ped::Tagent::setY(int newY) { y = newY; }
 
 void Ped::Tagent::computeNextDesiredPosition() {
 	destination = getNextDestination();

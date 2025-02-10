@@ -30,12 +30,10 @@ namespace Ped {
 		Tagent(double posX, double posY);
 
 		// Returns the coordinates of the desired position
-		int getDesiredX() const { return desiredPositionX; }
-		int getDesiredY() const { return desiredPositionY; }
-
-		// Sets the agent's position
-		void setX(int newX) { x = newX; }
-		void setY(int newY) { y = newY; }
+		int getDesiredX() const;
+		int getDesiredY() const;
+		void setX(int newX);
+		void setY(int newY);
 
 		// Update the position according to get closer
 		// to the current destination

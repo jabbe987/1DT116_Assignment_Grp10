@@ -15,8 +15,8 @@ void Ped::Tagents::computeNextDesiredPositions() {
 	
 	for (int i = 0; i<x.size();i+=8) {
 	std::cout << "X[" << i << "] = " << x[i] << std::endl;
-	__m256i x = _mm256_loadu_si256((__m256i*)&x[i]); //måste fixa namngivning
-	__m256i y = _mm256_loadu_si256((__m256i*)&y[i]);
+	__m256i xm = _mm256_loadu_si256((__m256i*)&x[i]); //måste fixa namngivning
+	__m256i ym = _mm256_loadu_si256((__m256i*)&y[i]);
 	
 	// __m256 dx = _mm256_loadu_ps(&destinations[i]->getx());
 	// __m256 dy = _mm256_loadu_ps(&destinations[i]->gety());
@@ -36,16 +36,16 @@ void Ped::Tagents::computeNextDesiredPositions() {
 	
 
 	//Calculate distance to next waypoint m
-	__m256i diffX = _mm256_sub_epi32(x, destX);
-	__m256i diffY = _mm256_sub_epi32(y, destY);
+	__m256i diffX = _mm256_sub_epi32(xm, destX);
+	__m256i diffY = _mm256_sub_epi32(ym, destY);
 	__m256i mulY = _mm256_mul_epi32(diffY,diffY);
 	__m256i mulX = _mm256_mul_epi32(diffX,diffX);
 	__m256i addxy = _mm256_add_epi32(mulX, mulY);
 	__m256 len = _mm256_sqrt_ps(_mm256_cvtepi32_ps(addxy));
 
-	__m256i xdiffx = _mm256_add_epi32(diffX, x);
+	__m256i xdiffx = _mm256_add_epi32(diffX, xm);
 	__m256 desPosX = _mm256_div_ps(_mm256_cvtepi32_ps(xdiffx), len);
-	__m256i ydiffy = _mm256_add_epi32(diffY, y);
+	__m256i ydiffy = _mm256_add_epi32(diffY, ym);
 	__m256 desPosY = _mm256_div_ps(_mm256_cvtepi32_ps(ydiffy), len);
 	
 	_mm256_storeu_ps((float*)&x, desPosX);

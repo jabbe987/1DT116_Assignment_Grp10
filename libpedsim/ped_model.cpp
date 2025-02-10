@@ -7,8 +7,8 @@
 //
 #include "ped_model.h"
 #include "ped_waypoint.h"
-#include "ped_model.h"
 #include "ped_agents.h"
+#include "ped_agent.h"
 #include <iostream>
 #include <stack>
 #include <algorithm>
@@ -35,8 +35,8 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 	agent_old = std::vector<Ped::Tagent*>(agentsInScenario.begin(), agentsInScenario.end());
 	// Set up destinations
 	destinations = std::vector<Ped::Twaypoint*>(destinationsInScenario.begin(), destinationsInScenario.end());
-
-	Ped::Tagents* agents = new Ped::Tagents(agentsInScenario.size());
+	
+	this->agents = new Ped::Tagents(agentsInScenario.size());
     for (const auto& a : agent_old) {
         agents->addAgent(a->getX(), a->getY(), a->getWaypoints()); // if not good take from agent_old
     }
@@ -105,7 +105,7 @@ void Ped::Model::tick()
             agent->setY(agent->getDesiredY());
         }*/
 	else if (implementation == SEQ) {  // simd_avx implementation
-		std::cout << "Inside SEQ implementation" << std::endl;
+		//std::cout << "Inside SEQ implementation" << std::endl;
 			//compute next blablabla
 			
 			/*agent->computeNextDesiredPosition();
@@ -191,7 +191,7 @@ set<const Ped::Tagent*> Ped::Model::getNeighbors(int x, int y, int dist) const {
 
 	// create the output list
 	// ( It would be better to include only the agents close by, but this programmer is lazy.)	
-	return set<const Ped::Tagent*>(agents.begin(), agents.end());
+	return set<const Ped::Tagent*>(agent_old.begin(), agent_old.end());
 }
 
 void Ped::Model::cleanup() {
@@ -200,6 +200,6 @@ void Ped::Model::cleanup() {
 
 Ped::Model::~Model()
 {
-	std::for_each(agents.begin(), agents.end(), [](Ped::Tagent *agent){delete agent;});
+	std::for_each(agent_old.begin(), agent_old.end(), [](Ped::Tagent *agent){delete agent;});
 	std::for_each(destinations.begin(), destinations.end(), [](Ped::Twaypoint *destination){delete destination; });
 }

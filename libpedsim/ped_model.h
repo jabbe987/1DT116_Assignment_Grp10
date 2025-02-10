@@ -37,7 +37,7 @@ namespace Ped{
 		void tick();
 
 		// Returns the agents of this scenario
-		const std::vector<Tagent*>& getAgents() const { return agents; };
+		const std::vector<Tagent*>& getAgents() const { return agent_old; };
 
 		// Adds an agent to the tree structure
 		void placeAgent(const Ped::Tagent *a);
@@ -59,7 +59,7 @@ namespace Ped{
 
 		// The agents in this scenario
 		std::vector<Tagent*> agent_old; //before SIMD
-		
+		Ped::Tagents* agents; //with SIMD
 
 		// The waypoints in this scenario
 		std::vector<Twaypoint*> destinations;

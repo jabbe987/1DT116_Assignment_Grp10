@@ -1,1 +1,14 @@
-Makefile.nocuda
+TARGET = libpedsim.so
+SOURCES = $(shell echo *.cpp)
+OBJECTS = $(SOURCES:.cpp=.o)
+CXXFLAGS = -fPIC -shared -lm -fopenmp -march=native -DNOCUDA
+
+all: $(TARGET)
+
+$(TARGET): $(OBJECTS)
+	$(CXX) $(FLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -o $(TARGET) $(OBJECTS)
+
+
+
+clean:
+	-rm $(TARGET) $(OBJECTS)

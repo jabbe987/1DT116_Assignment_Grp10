@@ -2,7 +2,11 @@
 //
 // Implements the heatmap functionality. 
 //
+
 #include "ped_model.h"
+#include "ped_agent.h"
+
+#include "ped_agents.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -15,6 +19,7 @@ using namespace std;
 // Sets up the heatmap
 void Ped::Model::setupHeatmapSeq()
 {
+	
 	int *hm = (int*)calloc(SIZE*SIZE, sizeof(int));
 	int *shm = (int*)malloc(SCALED_SIZE*SCALED_SIZE*sizeof(int));
 	int *bhm = (int*)malloc(SCALED_SIZE*SCALED_SIZE*sizeof(int));
@@ -48,11 +53,11 @@ void Ped::Model::updateHeatmapSeq()
 	}
 
 	// Count how many agents want to go to each location
-	for (int i = 0; i < agents.size(); i++)
+	for (int i = 0; i <agents->x.size();i++)
 	{
-		Ped::Tagent* agent = agents[i];
-		int x = agent->getDesiredX();
-		int y = agent->getDesiredY();
+		//Ped::Tagent* agent = agents->desiredX[i];
+		int x = agents->desiredX[i];
+		int y = agents->desiredY[i];
 
 		if (x < 0 || x >= SIZE || y < 0 || y >= SIZE)
 		{
