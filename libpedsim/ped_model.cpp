@@ -41,8 +41,6 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 		this->agents = new Ped::Tagents(agentsInScenario.size());
 	}
 	
-	// std::cout << "blabla: " << agentsInScenario.size() << std::endl;
-	// std::cout << "blabla: " << numAgents << std::endl;
 	std::cout << "Number of agents 1111: " << agent_old.size() << std::endl;
     for (const auto& a : agent_old) {
 		// std::cout << "a->getX() : " << a->getX() << std::endl;
@@ -50,15 +48,6 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
         this->agents->addAgent(a->getX(), a->getY(), a->getWaypoints()); // if not good take from agent_old
     }
 	std::cout << "Number of agents: " << this->agents->x.size() << std::endl;
-
-
-	
-	/*for (size_t i = 0; i < agents->x.size(); ++i) {
-		std::cout << "Agent " << i << " - x: " << agents->x[i] << ", y: " << agents->y[i] << std::endl;
-	}*/
-
-	
-	// destinations = destinations	InScenario;
 	
 	// Sets the chosen implemenation. Standard in the given code is SEQ
 	this->implementation = implementation;
@@ -69,87 +58,67 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 
 void Ped::Model::tick()
 {
-	/*
-	std::cout << "Number of agents: " << agents->x.size() << std::endl;
-	std::cout << "Number of destinations: " << agents->destinations.size() << std::endl;
-	std::cout << "Number of agents: " << agent_old.size() << std::endl;
-	
-
-	/*std::cout << "Agents:" << std::endl;
-	for (const auto& agent : agent_old) {
-		std::cout << "Agent at (" << agent->getX() << ", " << agent->getY() << ")" << std::endl;
-	}
-
-	std::cout << "Destinations:" << std::endl;
-	for (const auto& destination : destinations) {
-		std::cout << "Destination at (" << destination->getX() << ", " << destination->getY() << ")" << std::endl;
-	}*/
     if (implementation == OMP) {
-		agents->computeNextDesiredPositions();
-		// std::cout << "x pos: " << agents->x[100] <<std::endl;
-		// std::cout << "x old: " << agent_old[100]->getX() <<std::endl;
-		
-        // omp_set_num_threads(6);
-		
-		// #pragma omp parallel for schedule(static)
-        // for(size_t i = 0; i < agents.size(); i++) {
-        //     agents[i]->computeNextDesiredPosition();
-        //     agents[i]->setX(agents[i]->getDesiredX());
-        //     agents[i]->setY(agents[i]->getDesiredY());
-        // }
+		size_t numAgents = agents->x.size();
+
+		#pragma omp parallel for schedule(static)
+        for(size_t i = 0; i < numAgents; i+=8) {
+            agents->computeNextDesiredPositions(i);
+        }
     }
     else if (implementation == PTHREAD) {
-		// int numThreads = 4;
-		// size_t numAgents = agents.size();
-		// std::vector<std::thread> threads;
+		int numThreads = 4;
+		size_t numAgents = agents->x.size();
+		std::vector<std::thread> threads;
 
-		// // Determine workload boundaries for each thread
-		// size_t chunkSize = numAgents / numThreads;
-		// size_t remainder = numAgents % numThreads;
+		// Determine workload boundaries for each thread
+		size_t chunkSize = (numAgents / numThreads) & ~7;
+		// std::cout << "Chunksize: " << chunkSize <<std::endl;
+		size_t remainder = numAgents - (chunkSize * numThreads);
 
-		// size_t start = 0;
+		size_t start = 0;
 		
-		// // Worker function: Each thread gets a pre-determined chunk
-		// auto worker = [&](size_t start, size_t end) {
-        //     for (size_t i = start; i < end; i++) {
-        //         agents[i]->computeNextDesiredPosition();
-        //         agents[i]->setX(agents[i]->getDesiredX());
-        //         agents[i]->setY(agents[i]->getDesiredY());
-        //     }
-        // };
+		// Worker function: Each thread gets a pre-determined chunk
+		auto worker = [&](size_t start, size_t end) {
+            for (size_t i = start; i < end; i+=8) {
+                agents->computeNextDesiredPositions(i);
+            }
+        };
 
-		// // Launch threads
-		// for (size_t i = 0; i < numThreads; i++) {
-        //     size_t end = start + chunkSize + (i < remainder ? 1 : 0); // Distribute extra agents to first few threads
-        //     if (start < numAgents) {  // Avoid empty threads
-        //         threads.push_back(std::thread(worker, start, end));
-        //     }
-        //     start = end;
-        // }
+		// Launch threads
+		for (size_t i = 0; i < numThreads; i++) {
+            size_t end = start + chunkSize; // Distribute extra agents to first few threads
+			if (remainder > 0) {
+				size_t extra = std::min<size_t>(remainder, 8);  // Give up to 8 extra agents per thread
+				end += 8;
+				remainder -= extra;
+			}
+            if (start < numAgents) {  // Avoid empty threads
+                threads.push_back(std::thread(worker, start, end));
+            }
+            start = end;
+        }
 
-		// // Join threads
-		// for (auto& t : threads) {
-		// 	t.join();
-    	// }
+		// Join threads
+		for (auto& t : threads) {
+			t.join();
+    	}
 	}
 	
+	else if (implementation == VECTOR) {  // SIMD serial
+		size_t numAgents = agents->x.size();
+
+        for(size_t i = 0; i < numAgents; i+=8) {
+            agents->computeNextDesiredPositions(i);
+        }
+	}
+
     else if (implementation == SEQ) {  // Default to serial
         for (Ped::Tagent* agent : agent_old) {
             agent->computeNextDesiredPosition();
             agent->setX(agent->getDesiredX());
             agent->setY(agent->getDesiredY());
         }
-	// else if (implementation == SEQ) {  // simd_avx implementation
-	// 	//std::cout << "Inside SEQ implementation" << std::endl;
-	// 		//compute next blablabla
-			
-	// 		agents->computeNextDesiredPositions();
-	// 		// std::cout << "Completed compute desired positions" << std::endl;
-			
-    //         /*agent->setX(agent->getDesiredX());
-    //         agent->setY(agent->getDesiredY());*/
-			
-    //     }   
 	}
 }
 

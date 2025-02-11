@@ -2,6 +2,7 @@
 #include <iostream>
 #include <immintrin.h>
 #include <cmath>
+#include <omp.h>
 
 void Ped::Tagents::addAgent(float posX, float posY, const std::vector<Ped::Twaypoint*>& agentWaypoints) {
     x.push_back(posX);
@@ -18,96 +19,97 @@ void Ped::Tagents::addAgent(float posX, float posY, const std::vector<Ped::Twayp
     // waypoints.push_back(agentWaypoints);
 }
 
-void Ped::Tagents::computeNextDesiredPositions() {
-    size_t numAgents = x.size();
-    size_t simdLimit = numAgents / 8 * 8;
+void Ped::Tagents::computeNextDesiredPositions(int i) {
+    // size_t numAgents = x.size();
+    // size_t simdLimit = numAgents / 8 * 8;
     
-    for (size_t i = 0; i < numAgents; i += 8) {
+    // #pragma omp parallel for
+    // for (size_t i = 0; i < numAgents; i += 8) {
         // std::cout << "i: " << i << std::endl;
-        // Load position vectors
-        __m256 xVec = _mm256_loadu_ps(&x[i]);
-        __m256 yVec = _mm256_loadu_ps(&y[i]);
-        // Destination vectors
-        __m256 destXVec = _mm256_loadu_ps(&destinationX[i]);
-        __m256 destYVec = _mm256_loadu_ps(&destinationY[i]);
-        __m256 destRVec = _mm256_loadu_ps(&destinationR[i]);
-        // Compute direction vectors
-        __m256 diffX = _mm256_sub_ps(destXVec, xVec);
-        __m256 diffY = _mm256_sub_ps(destYVec, yVec);
+    // Load position vectors
+    __m256 xVec = _mm256_loadu_ps(&x[i]);
+    __m256 yVec = _mm256_loadu_ps(&y[i]);
+    // Destination vectors
+    __m256 destXVec = _mm256_loadu_ps(&destinationX[i]);
+    __m256 destYVec = _mm256_loadu_ps(&destinationY[i]);
+    __m256 destRVec = _mm256_loadu_ps(&destinationR[i]);
+    // Compute direction vectors
+    __m256 diffX = _mm256_sub_ps(destXVec, xVec);
+    __m256 diffY = _mm256_sub_ps(destYVec, yVec);
 
-        // Compute length (Euclidean distance)
-        __m256 distSquared = _mm256_add_ps(
-            _mm256_mul_ps(diffX, diffX),
-            _mm256_mul_ps(diffY, diffY)
-        );
-        __m256 len = _mm256_sqrt_ps(distSquared);
+    // Compute length (Euclidean distance)
+    __m256 distSquared = _mm256_add_ps(
+        _mm256_mul_ps(diffX, diffX),
+        _mm256_mul_ps(diffY, diffY)
+    );
+    __m256 len = _mm256_sqrt_ps(distSquared);
+    
+    
+    __m256 mask = _mm256_cmp_ps(len, destRVec, _CMP_LT_OQ); 
+    // Check each agent separately
+    
+    int maskArr = _mm256_movemask_ps(mask);
+    
+    if (maskArr) {
+        // Case 1: agent has reached destination (or has no current destination);
+        // get next destination if available
+        __m256 destX2Vec = _mm256_loadu_ps(&destinationX2[i]);
+        __m256 destY2Vec = _mm256_loadu_ps(&destinationY2[i]);
+        __m256 destR2Vec = _mm256_loadu_ps(&destinationR2[i]);
         
-        
-        __m256 mask = _mm256_cmp_ps(len, destRVec, _CMP_LT_OQ); 
-        // Check each agent separately
-        
-        int maskArr = _mm256_movemask_ps(mask);
-        
-        if (maskArr) {
-            // Case 1: agent has reached destination (or has no current destination);
-            // get next destination if available
-            __m256 destX2Vec = _mm256_loadu_ps(&destinationX2[i]);
-            __m256 destY2Vec = _mm256_loadu_ps(&destinationY2[i]);
-            __m256 destR2Vec = _mm256_loadu_ps(&destinationR2[i]);
-            
-            __m256 tempx = destXVec;
-            _mm256_storeu_ps(&destinationX[i], destX2Vec);
-            _mm256_storeu_ps(&destinationX2[i], tempx);
-            destXVec = destX2Vec;
+        __m256 tempx = destXVec;
+        _mm256_storeu_ps(&destinationX[i], destX2Vec);
+        _mm256_storeu_ps(&destinationX2[i], tempx);
+        destXVec = destX2Vec;
 
-            __m256 tempy = destYVec;
-            _mm256_storeu_ps(&destinationY[i], destY2Vec);
-            _mm256_storeu_ps(&destinationY2[i], tempy);
-            destYVec = destY2Vec;
+        __m256 tempy = destYVec;
+        _mm256_storeu_ps(&destinationY[i], destY2Vec);
+        _mm256_storeu_ps(&destinationY2[i], tempy);
+        destYVec = destY2Vec;
 
-            __m256 tempr = destRVec;
-            _mm256_storeu_ps(&destinationR[i], destR2Vec);
-            _mm256_storeu_ps(&destinationR2[i], tempr);
-            destRVec = destR2Vec;
-        }
-
-        diffX = _mm256_sub_ps(destXVec, xVec);
-        diffY = _mm256_sub_ps(destYVec, yVec);
-
-        // Compute length (Euclidean distance)
-        distSquared = _mm256_add_ps(
-            _mm256_mul_ps(diffX, diffX),
-            _mm256_mul_ps(diffY, diffY)
-        );
-        len = _mm256_sqrt_ps(distSquared);
-        
-
-        // Prevent division by zero
-        __m256 zeroMask = _mm256_cmp_ps(len, _mm256_set1_ps(0.0001f), _CMP_GT_OQ);
-        len = _mm256_blendv_ps(_mm256_set1_ps(1.0f), len, zeroMask);
-
-        // Normalize direction
-        __m256 dirX = _mm256_div_ps(diffX, len);
-        __m256 dirY = _mm256_div_ps(diffY, len);
-
-        // Compute new desired positions
-        __m256 nextX = _mm256_add_ps(xVec, dirX);
-        __m256 nextY = _mm256_add_ps(yVec, dirY);
-
-        // Store results back
-        _mm256_storeu_ps(&x[i], nextX);
-        _mm256_storeu_ps(&y[i], nextY);
+        __m256 tempr = destRVec;
+        _mm256_storeu_ps(&destinationR[i], destR2Vec);
+        _mm256_storeu_ps(&destinationR2[i], tempr);
+        destRVec = destR2Vec;
     }
 
-    for (size_t i = simdLimit; i < numAgents; i++) {
-        x.pop_back();
-        y.pop_back();
-        destinationX.pop_back();
-        destinationY.pop_back();
-        destinationR.pop_back();
-        destinationX2.pop_back();
-        destinationY2.pop_back();
-        destinationR2.pop_back();
+    diffX = _mm256_sub_ps(destXVec, xVec);
+    diffY = _mm256_sub_ps(destYVec, yVec);
+
+    // Compute length (Euclidean distance)
+    distSquared = _mm256_add_ps(
+        _mm256_mul_ps(diffX, diffX),
+        _mm256_mul_ps(diffY, diffY)
+    );
+    len = _mm256_sqrt_ps(distSquared);
+    
+
+    // Prevent division by zero
+    __m256 zeroMask = _mm256_cmp_ps(len, _mm256_set1_ps(0.0001f), _CMP_GT_OQ);
+    len = _mm256_blendv_ps(_mm256_set1_ps(1.0f), len, zeroMask);
+
+    // Normalize direction
+    __m256 dirX = _mm256_div_ps(diffX, len);
+    __m256 dirY = _mm256_div_ps(diffY, len);
+
+    // Compute new desired positions
+    __m256 nextX = _mm256_add_ps(xVec, dirX);
+    __m256 nextY = _mm256_add_ps(yVec, dirY);
+
+    // Store results back
+    _mm256_storeu_ps(&x[i], nextX);
+    _mm256_storeu_ps(&y[i], nextY);
+    
+
+    // for (size_t i = simdLimit; i < numAgents; i++) {
+    //     x.pop_back();
+    //     y.pop_back();
+    //     destinationX.pop_back();
+    //     destinationY.pop_back();
+    //     destinationR.pop_back();
+    //     destinationX2.pop_back();
+    //     destinationY2.pop_back();
+    //     destinationR2.pop_back();
 
         // getNextDestinationSeq(i);
         // // std::cout << "i: " << i << std::endl;
@@ -127,7 +129,7 @@ void Ped::Tagents::computeNextDesiredPositions() {
         // length = sqrtf(diffX * diffX + diffY * diffY);
         // x[i] = x[i] + (diffX / length);
         // y[i] = y[i] + (diffY / length);
-    }
+    
 }
 
 

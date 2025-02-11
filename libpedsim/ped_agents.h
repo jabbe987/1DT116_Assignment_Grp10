@@ -24,8 +24,7 @@ namespace Ped {
 
         
         void addAgent(float posX, float posY, const std::vector<Ped::Twaypoint*>& agentWaypoints);
-        void deleteAgent(int i);
-        void computeNextDesiredPositions();
+        void computeNextDesiredPositions(int i);
         void getNextDestinationSeq(int i);
     };
 }
