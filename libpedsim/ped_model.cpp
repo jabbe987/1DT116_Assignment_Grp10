@@ -86,8 +86,8 @@ void Ped::Model::tick()
 	}*/
     if (implementation == OMP) {
 		agents->computeNextDesiredPositions();
-		std::cout << "x pos: " << agents->x[100] <<std::endl;
-		std::cout << "x old: " << agent_old[100]->getX() <<std::endl;
+		// std::cout << "x pos: " << agents->x[100] <<std::endl;
+		// std::cout << "x old: " << agent_old[100]->getX() <<std::endl;
 		
         // omp_set_num_threads(6);
 		

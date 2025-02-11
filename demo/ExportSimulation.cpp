@@ -25,7 +25,7 @@ void ExportSimulation::serialize()
 
     for (size_t i = 0; i < num_agents; i++) {
         int16_t x = static_cast<int16_t>(agents->x[i]);
-        int16_t y = static_cast<int16_t>(agents->x[i]);
+        int16_t y = static_cast<int16_t>(agents->y[i]);
 
         file.write(reinterpret_cast<const char *>(&x), sizeof(x));
         file.write(reinterpret_cast<const char *>(&y), sizeof(y));
