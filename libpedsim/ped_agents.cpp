@@ -22,13 +22,7 @@ void Ped::Tagents::addAgent(float posX, float posY, const std::vector<Ped::Twayp
 }
 
 void Ped::Tagents::computeNextDesiredPositions(int i) {
-    // size_t numAgents = x.size();
-    // size_t simdLimit = numAgents / 8 * 8;
-    
-    // #pragma omp parallel for
-    // for (size_t i = 0; i < numAgents; i += 8) {
-        // std::cout << "i: " << i << std::endl;
-    // Load position vectors
+
     __m256 xVec = _mm256_loadu_ps(&x[i]);
     __m256 yVec = _mm256_loadu_ps(&y[i]);
     // Destination vectors
@@ -102,36 +96,6 @@ void Ped::Tagents::computeNextDesiredPositions(int i) {
     _mm256_storeu_ps(&x[i], nextX);
     _mm256_storeu_ps(&y[i], nextY);
     
-
-    // for (size_t i = simdLimit; i < numAgents; i++) {
-    //     x.pop_back();
-    //     y.pop_back();
-    //     destinationX.pop_back();
-    //     destinationY.pop_back();
-    //     destinationR.pop_back();
-    //     destinationX2.pop_back();
-    //     destinationY2.pop_back();
-    //     destinationR2.pop_back();
-
-        // getNextDestinationSeq(i);
-        // // std::cout << "i: " << i << std::endl;
-
-        // float diffX = destinationX[i] - x[i];
-        // float diffY = destinationY[i] - y[i];
-
-        // // std::cout << "diffX :" << diffX << std::endl;
-        // // std::cout << "diffY :" << diffY << std::endl;
-
-        // float length = sqrtf(diffX * diffX + diffY * diffY);
-        
-        // //if (len < 0.0001f) len = 1.0f; // Prevent division by zero
-        
-        // diffX = destinationX[i] - x[i];
-        // diffY = destinationY[i] - y[i];
-        // length = sqrtf(diffX * diffX + diffY * diffY);
-        // x[i] = x[i] + (diffX / length);
-        // y[i] = y[i] + (diffY / length);
-    
 }
 
 
@@ -140,15 +104,15 @@ void Ped::Tagents::getNextDestinationSeq(int i) {
     float diffX = destinationX[i] - x[i];
     float diffY = destinationY[i] - y[i];
     float length = sqrtf(diffX * diffX + diffY * diffY); // Compute distance
-    std::cout << "length: " << length << "  i: " << i << "  r:  "<< destinationR[i] << " destination: " << destinationX[i] << "destination2: " << destinationX2[i]<<std::endl;
+    // std::cout << "length: " << length << "  i: " << i << "  r:  "<< destinationR[i] << " destination: " << destinationX[i] << "destination2: " << destinationX2[i]<<std::endl;
 
     if (length < destinationR[i]) {
 
-        std::cout << "swap nr :" << i << std::endl;
+        // std::cout << "swap nr :" << i << std::endl;
         std::swap(destinationX[i], destinationX2[i]);
         std::swap(destinationY[i], destinationY2[i]);
         std::swap(destinationR[i], destinationR2[i]);
-        std::cout << "Agent " << i <<"swapped location!"<< std::endl;
+        // std::cout << "Agent " << i <<"swapped location!"<< std::endl;
 
     }
 }

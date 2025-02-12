@@ -36,6 +36,8 @@ namespace Ped{
 		// Coordinates a time step in the scenario: move all agents by one step (if applicable).
 		void tick();
 
+		void remainderSeq(size_t start, size_t end);
+
 		// Returns the agents of this scenario
 		const std::vector<Tagent*>& getAgents() const { return agent_old; };
 

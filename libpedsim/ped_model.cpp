@@ -15,6 +15,7 @@
 #include <omp.h>
 #include <thread>
 #include <atomic>
+#include <cmath>
 #include <immintrin.h>
 #include <xmmintrin.h>
 
@@ -59,16 +60,20 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 void Ped::Model::tick()
 {
     if (implementation == OMP) {
+		
 		size_t numAgents = agents->x.size();
-
+		size_t simdLimit = numAgents / 8 * 8;
+		omp_set_num_threads(6);
 		#pragma omp parallel for schedule(static)
-        for(size_t i = 0; i < numAgents; i+=8) {
+        for(size_t i = 0; i < simdLimit; i+=8) {
             agents->computeNextDesiredPositions(i);
         }
+		remainderSeq(simdLimit, numAgents);
     }
     else if (implementation == PTHREAD) {
 		int numThreads = 4;
 		size_t numAgents = agents->x.size();
+		size_t simdLimit = numAgents / 8 * 8;
 		std::vector<std::thread> threads;
 
 		// Determine workload boundaries for each thread
@@ -88,10 +93,9 @@ void Ped::Model::tick()
 		// Launch threads
 		for (size_t i = 0; i < numThreads; i++) {
             size_t end = start + chunkSize; // Distribute extra agents to first few threads
-			if (remainder > 0) {
-				size_t extra = std::min<size_t>(remainder, 8);  // Give up to 8 extra agents per thread
+			if (remainder > 7) {
 				end += 8;
-				remainder -= extra;
+				remainder -= 8;
 			}
             if (start < numAgents) {  // Avoid empty threads
                 threads.push_back(std::thread(worker, start, end));
@@ -103,14 +107,17 @@ void Ped::Model::tick()
 		for (auto& t : threads) {
 			t.join();
     	}
+		remainderSeq(numAgents - remainder, numAgents);
 	}
 	
 	else if (implementation == VECTOR) {  // SIMD serial
 		size_t numAgents = agents->x.size();
+		size_t simdLimit = numAgents / 8 * 8;
 
-        for(size_t i = 0; i < numAgents; i+=8) {
+        for(size_t i = 0; i < simdLimit; i+=8) {
             agents->computeNextDesiredPositions(i);
         }
+		remainderSeq(simdLimit, numAgents);
 	}
 
     else if (implementation == SEQ) {  // Default to serial
@@ -122,6 +129,20 @@ void Ped::Model::tick()
 	}
 }
 
+
+void Ped::Model::remainderSeq(size_t start, size_t end) {
+	for (size_t i = start; i < end; i++) {
+		agents->getNextDestinationSeq(i);
+		float diffX = agents->destinationX[i] - agents->x[i];
+		float diffY = agents->destinationY[i] - agents->y[i];
+		float length = sqrtf(diffX * diffX + diffY * diffY);
+		diffX = agents->destinationX[i] - agents->x[i];
+		diffY = agents->destinationY[i] - agents->y[i];
+		length = sqrtf(diffX * diffX + diffY * diffY);
+		agents->x[i] = agents->x[i] + (diffX / length);
+		agents->y[i] = agents->y[i] + (diffY / length);
+	}
+}
 
 
 
