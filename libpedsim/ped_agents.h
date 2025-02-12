@@ -11,6 +11,8 @@ namespace Ped {
     struct Tagents {
         std::vector<float> x;
         std::vector<float> y;
+        std::vector<float> desiredX;
+        std::vector<float> desiredY;
         std::vector<float> destinationX;
         std::vector<float> destinationY;
         std::vector<float> destinationR;

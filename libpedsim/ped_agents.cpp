@@ -7,6 +7,8 @@
 void Ped::Tagents::addAgent(float posX, float posY, const std::vector<Ped::Twaypoint*>& agentWaypoints) {
     x.push_back(posX);
     y.push_back(posY);
+    desiredX.push_back(posX);
+    desiredY.push_back(posY);
 
     destinationX.push_back(agentWaypoints.empty() ? posX : agentWaypoints.front()->getx());
     destinationY.push_back(agentWaypoints.empty() ? posY : agentWaypoints.front()->gety());
