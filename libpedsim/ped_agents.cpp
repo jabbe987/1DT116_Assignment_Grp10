@@ -44,33 +44,53 @@ void Ped::Tagents::computeNextDesiredPositions(int i) {
     __m256 mask = _mm256_cmp_ps(len, destRVec, _CMP_LT_OQ); 
     // Check each agent separately
     
-    int maskArr = _mm256_movemask_ps(mask);
+    __m256 destX2Vec = _mm256_loadu_ps(&destinationX2[i]);
+    __m256 destY2Vec = _mm256_loadu_ps(&destinationY2[i]);
+    __m256 destR2Vec = _mm256_loadu_ps(&destinationR2[i]);
+
+    __m256 destXVecUp = _mm256_blendv_ps(destXVec, destX2Vec, mask);
+    __m256 destYVecUp = _mm256_blendv_ps(destYVec, destY2Vec, mask);
+    __m256 destRVecUp = _mm256_blendv_ps(destRVec, destR2Vec, mask);
+
+    __m256 destX2VecUp = _mm256_blendv_ps(destX2Vec, destXVec, mask);
+    __m256 destY2VecUp = _mm256_blendv_ps(destY2Vec, destYVec, mask);
+    __m256 destR2VecUp = _mm256_blendv_ps(destR2Vec, destRVec, mask);
+
+    _mm256_storeu_ps(&destinationX[i], destXVecUp);
+    _mm256_storeu_ps(&destinationY[i], destYVecUp);
+    _mm256_storeu_ps(&destinationR[i], destRVecUp);
+
+    _mm256_storeu_ps(&destinationX2[i], destX2VecUp);
+    _mm256_storeu_ps(&destinationY2[i], destY2VecUp);
+    _mm256_storeu_ps(&destinationR2[i], destR2VecUp);
+
+    // int maskArr = _mm256_movemask_ps(mask);
     
-    if (maskArr) {
-        // Case 1: agent has reached destination (or has no current destination);
-        // get next destination if available
-        __m256 destX2Vec = _mm256_loadu_ps(&destinationX2[i]);
-        __m256 destY2Vec = _mm256_loadu_ps(&destinationY2[i]);
-        __m256 destR2Vec = _mm256_loadu_ps(&destinationR2[i]);
+    // if (maskArr) {
+    //     // Case 1: agent has reached destination (or has no current destination);
+    //     // get next destination if available
+    //     __m256 destX2Vec = _mm256_loadu_ps(&destinationX2[i]);
+    //     __m256 destY2Vec = _mm256_loadu_ps(&destinationY2[i]);
+    //     __m256 destR2Vec = _mm256_loadu_ps(&destinationR2[i]);
         
-        __m256 tempx = destXVec;
-        _mm256_storeu_ps(&destinationX[i], destX2Vec);
-        _mm256_storeu_ps(&destinationX2[i], tempx);
-        destXVec = destX2Vec;
+    //     __m256 tempx = destXVec;
+    //     _mm256_storeu_ps(&destinationX[i], destX2Vec);
+    //     _mm256_storeu_ps(&destinationX2[i], tempx);
+    //     destXVec = destX2Vec;
 
-        __m256 tempy = destYVec;
-        _mm256_storeu_ps(&destinationY[i], destY2Vec);
-        _mm256_storeu_ps(&destinationY2[i], tempy);
-        destYVec = destY2Vec;
+    //     __m256 tempy = destYVec;
+    //     _mm256_storeu_ps(&destinationY[i], destY2Vec);
+    //     _mm256_storeu_ps(&destinationY2[i], tempy);
+    //     destYVec = destY2Vec;
 
-        __m256 tempr = destRVec;
-        _mm256_storeu_ps(&destinationR[i], destR2Vec);
-        _mm256_storeu_ps(&destinationR2[i], tempr);
-        destRVec = destR2Vec;
-    }
+    //     __m256 tempr = destRVec;
+    //     _mm256_storeu_ps(&destinationR[i], destR2Vec);
+    //     _mm256_storeu_ps(&destinationR2[i], tempr);
+    //     destRVec = destR2Vec;
+    // }
 
-    diffX = _mm256_sub_ps(destXVec, xVec);
-    diffY = _mm256_sub_ps(destYVec, yVec);
+    diffX = _mm256_sub_ps(destXVecUp, xVec);
+    diffY = _mm256_sub_ps(destYVecUp, yVec);
 
     // Compute length (Euclidean distance)
     distSquared = _mm256_add_ps(
