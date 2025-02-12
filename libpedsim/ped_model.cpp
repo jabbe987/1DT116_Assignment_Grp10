@@ -121,11 +121,12 @@ void Ped::Model::tick()
 	}
 
     else if (implementation == SEQ) {  // Default to serial
-        for (Ped::Tagent* agent : agent_old) {
-            agent->computeNextDesiredPosition();
-            agent->setX(agent->getDesiredX());
-            agent->setY(agent->getDesiredY());
-        }
+		remainderSeq(0, agents->x.size());
+        // for (Ped::Tagent* agent : agent_old) {
+        //     agent->computeNextDesiredPosition();
+        //     agent->setX(agent->getDesiredX());
+        //     agent->setY(agent->getDesiredY());
+        // }
 	}
 }
 
