@@ -69,13 +69,15 @@ namespace Ped{
 		std::vector<Twaypoint*> destinations;
 
 		// Moves an agent towards its next position
-		void move(Ped::Tagent *agent);
+		void move_old(Ped::Tagent *agent);
 
+		void move(int i);
 		////////////
 		/// Everything below here won't be relevant until Assignment 3
 		///////////////////////////////////////////////
 
 		// Returns the set of neighboring agents for the specified position
+		set<const Ped::Tagent*> getNeighbors_old(int x, int y, int dist) const;
 		set<const Ped::Tagent*> getNeighbors(int x, int y, int dist) const;
 
 		////////////
