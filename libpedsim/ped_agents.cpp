@@ -113,8 +113,8 @@ void Ped::Tagents::computeNextDesiredPositions(int i) {
     __m256 nextY = _mm256_add_ps(yVec, dirY);
 
     // Store results back
-    _mm256_storeu_ps(&x[i], nextX);
-    _mm256_storeu_ps(&y[i], nextY);
+    _mm256_storeu_ps(&desiredX[i], nextX);
+    _mm256_storeu_ps(&desiredY[i], nextY);
     
 }
 

@@ -121,7 +121,12 @@ void Ped::Model::tick()
 	}
 
     else if (implementation == SEQ) {  // Default to serial
-		remainderSeq(0, agents->x.size());
+		// remainderSeq(0, agents->x.size()); //struct of arrays version
+
+		for(Ped::Tagent* agent : agent_old){
+			agent->computeNextDesiredPosition();
+			move(agent);
+		}
         // for (Ped::Tagent* agent : agent_old) {
         //     agent->computeNextDesiredPosition();
         //     agent->setX(agent->getDesiredX());
@@ -140,8 +145,8 @@ void Ped::Model::remainderSeq(size_t start, size_t end) {
 		diffX = agents->destinationX[i] - agents->x[i];
 		diffY = agents->destinationY[i] - agents->y[i];
 		length = sqrtf(diffX * diffX + diffY * diffY);
-		agents->x[i] = agents->x[i] + (diffX / length);
-		agents->y[i] = agents->y[i] + (diffY / length);
+		agents->desiredX[i] = agents->x[i] + (diffX / length);
+		agents->desiredY[i] = agents->y[i] + (diffY / length);
 	}
 }
 
