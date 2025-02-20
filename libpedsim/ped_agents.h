@@ -25,7 +25,7 @@ namespace Ped {
         Tagents(size_t numAgents) {}
 
         
-        void addAgent(float posX, float posY, const std::vector<Ped::Twaypoint*>& agentWaypoints);
+        void addAgent(int posX, int posY, const std::vector<Ped::Twaypoint*>& agentWaypoints);
         void computeNextDesiredPositions(int i);
         void getNextDestinationSeq(int i);
     };

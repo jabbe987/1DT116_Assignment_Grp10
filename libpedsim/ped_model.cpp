@@ -44,8 +44,6 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 	
 	std::cout << "Number of agents 1111: " << agent_old.size() << std::endl;
     for (const auto& a : agent_old) {
-		// std::cout << "a->getX() : " << a->getX() << std::endl;
-		// std::cout << "a->getY() : " << a->getY() << std::endl;
         this->agents->addAgent(a->getX(), a->getY(), a->getWaypoints()); // if not good take from agent_old
     }
 	std::cout << "Number of agents: " << this->agents->x.size() << std::endl;
@@ -69,6 +67,10 @@ void Ped::Model::tick()
             agents->computeNextDesiredPositions(i);
         }
 		remainderSeq(simdLimit, numAgents);
+
+		for(size_t i = 0; i < agents->x.size(); i++) {
+			move(i);
+		}
     }
     else if (implementation == PTHREAD) {
 		int numThreads = 4;
@@ -108,6 +110,10 @@ void Ped::Model::tick()
 			t.join();
     	}
 		remainderSeq(numAgents - remainder, numAgents);
+
+		for(size_t i = 0; i < agents->x.size(); i++) {
+			move(i);
+		}
 	}
 	
 	else if (implementation == VECTOR) {  // SIMD serial
@@ -142,14 +148,17 @@ void Ped::Model::tick()
 void Ped::Model::remainderSeq(size_t start, size_t end) {
 	for (size_t i = start; i < end; i++) {
 		agents->getNextDestinationSeq(i);
-		float diffX = agents->destinationX[i] - agents->x[i];
-		float diffY = agents->destinationY[i] - agents->y[i];
-		float length = sqrtf(diffX * diffX + diffY * diffY);
+		double diffX = agents->destinationX[i] - agents->x[i];
+		double diffY = agents->destinationY[i] - agents->y[i];
+		double length = sqrtf(diffX * diffX + diffY * diffY);
 		diffX = agents->destinationX[i] - agents->x[i];
 		diffY = agents->destinationY[i] - agents->y[i];
 		length = sqrtf(diffX * diffX + diffY * diffY);
-		agents->desiredX[i] = agents->x[i] + (diffX / length);
-		agents->desiredY[i] = agents->y[i] + (diffY / length);
+		if(length < 0.0001) {
+			length = 0.1;
+		}
+		agents->desiredX[i] = (int)round(agents->x[i] + (diffX / length));
+		agents->desiredY[i] = (int)round(agents->y[i] + (diffY / length));
 	}
 }
 
@@ -189,6 +198,7 @@ void Ped::Model::move(int i)
 		p1 = std::make_pair(pDesired.first, agents->y[i]);
 		p2 = std::make_pair(agents->x[i], pDesired.second);
 	}
+	
 	prioritizedAlternatives.push_back(p1);
 	prioritizedAlternatives.push_back(p2);
 
@@ -201,7 +211,7 @@ void Ped::Model::move(int i)
 			// Set the agent's position 
 			agents->x[i] = ((*it).first);
 			agents->y[i] = ((*it).second);
-
+		
 			break;
 		}
 	}
@@ -230,14 +240,19 @@ void Ped::Model::move_old(Ped::Tagent *agent)
 	for (std::set<const Ped::Tagent*>::iterator neighborIt = neighbors.begin(); neighborIt != neighbors.end(); ++neighborIt) {
 		std::pair<int, int> position((*neighborIt)->getX(), (*neighborIt)->getY());
 		takenPositions.push_back(position);
+		for(int i = 0; i < 10; i++) {
+			std::cout << "takenPositions: " << position.first << " " << position.second << std::endl;
+			
+		}	
 	}
+	
 
 	// Compute the three alternative positions that would bring the agent
 	// closer to his desiredPosition, starting with the desiredPosition itself
 	std::vector<std::pair<int, int> > prioritizedAlternatives;
 	std::pair<int, int> pDesired(agent->getDesiredX(), agent->getDesiredY());
 	prioritizedAlternatives.push_back(pDesired);
-
+	
 	int diffX = pDesired.first - agent->getX();
 	int diffY = pDesired.second - agent->getY();
 	std::pair<int, int> p1, p2;
@@ -254,6 +269,7 @@ void Ped::Model::move_old(Ped::Tagent *agent)
 	}
 	prioritizedAlternatives.push_back(p1);
 	prioritizedAlternatives.push_back(p2);
+	
 
 	// Find the first empty alternative position
 	for (std::vector<pair<int, int> >::iterator it = prioritizedAlternatives.begin(); it != prioritizedAlternatives.end(); ++it) {
@@ -264,7 +280,7 @@ void Ped::Model::move_old(Ped::Tagent *agent)
 			// Set the agent's position 
 			agent->setX((*it).first);
 			agent->setY((*it).second);
-
+			
 			break;
 		}
 	}
