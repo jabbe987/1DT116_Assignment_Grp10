@@ -23,7 +23,7 @@ namespace Ped{
 
 	// The implementation modes for Assignment 1 + 2:
 	// chooses which implementation to use for tick()
-	enum IMPLEMENTATION { CUDA, VECTOR, OMP, PTHREAD, SEQ };
+	enum IMPLEMENTATION { CUDA, VECTOR, OMP, OMPMOVE, PTHREAD, SEQ };
 
 	class Model
 	{
@@ -37,6 +37,10 @@ namespace Ped{
 		void tick();
 
 		void remainderSeq(size_t start, size_t end);
+
+		std::vector<std::vector<int>> getAgentsByRegion();
+
+		int getRegion(float x, float y);
 
 		// Returns the agents of this scenario
 		const std::vector<Tagent*>& getAgents() const { return agent_old; };

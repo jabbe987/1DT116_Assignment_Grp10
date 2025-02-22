@@ -19,13 +19,14 @@ namespace Ped {
         std::vector<float> destinationX2;
         std::vector<float> destinationY2;
         std::vector<float> destinationR2;
+        std::vector<int> regions; // 11, 27,103 
         // std::vector<Ped::Twaypoint*> destinations; //current destination for all agents
         // std::vector<std::vector<Ped::Twaypoint*>> waypoints; //all possible destinations for all agents
 
         Tagents(size_t numAgents) {}
 
         
-        void addAgent(int posX, int posY, const std::vector<Ped::Twaypoint*>& agentWaypoints);
+        void addAgent(int posX, int posY, const std::vector<Ped::Twaypoint*>& agentWaypoints, int region);
         void computeNextDesiredPositions(int i);
         void getNextDestinationSeq(int i);
     };

@@ -18,6 +18,8 @@
 #include <cmath>
 #include <immintrin.h>
 #include <xmmintrin.h>
+#include <mutex>
+std::mutex regionMutex;  // Global mutex for region updates
 
 #ifndef NOCDUA
 #include "cuda_testkernel.h"
@@ -44,7 +46,7 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 	
 	std::cout << "Number of agents 1111: " << agent_old.size() << std::endl;
     for (const auto& a : agent_old) {
-        this->agents->addAgent(a->getX(), a->getY(), a->getWaypoints()); // if not good take from agent_old
+        this->agents->addAgent(a->getX(), a->getY(), a->getWaypoints(), getRegion(a->getX(), a->getY())); // if not good take from agent_old
     }
 	std::cout << "Number of agents: " << this->agents->x.size() << std::endl;
 	
@@ -67,11 +69,27 @@ void Ped::Model::tick()
             agents->computeNextDesiredPositions(i);
         }
 		remainderSeq(simdLimit, numAgents);
-
 		for(size_t i = 0; i < agents->x.size(); i++) {
 			move(i);
+		}    
+	}
+    
+	else if (implementation == OMPMOVE) {
+		
+			std::vector<std::vector<int>> agentsInRegion = getAgentsByRegion();
+			remainderSeq(0, agents->x.size()); 
+	
+			#pragma omp parallel for schedule(static)
+			for (size_t region = 0; region < agentsInRegion.size(); region++) {  
+				for (size_t j = 0; j < agentsInRegion[region].size(); j++) {
+					int agentIndex = agentsInRegion[region][j];  
+					move(agentIndex);
 		}
-    }
+		}
+	
+	}
+		
+	  
     else if (implementation == PTHREAD) {
 		int numThreads = 4;
 		size_t numAgents = agents->x.size();
@@ -132,6 +150,8 @@ void Ped::Model::tick()
 
     else if (implementation == SEQ) {  // Default to serial
 		remainderSeq(0, agents->x.size()); //struct of arrays version
+		
+
 
 		for(size_t i = 0; i < agents->x.size(); i++) {
 			move(i);
@@ -143,6 +163,8 @@ void Ped::Model::tick()
         // }
 	}
 }
+
+
 
 
 void Ped::Model::remainderSeq(size_t start, size_t end) {
@@ -162,7 +184,29 @@ void Ped::Model::remainderSeq(size_t start, size_t end) {
 	}
 }
 
+std::vector<std::vector<int>> Ped::Model::getAgentsByRegion() {
+	std::vector<std::vector<int>> regions(4);  // Assuming 4 regions (1 to 4)
 
+	for (size_t i = 0; i < agents->x.size(); ++i) {
+		int region = agents->regions[i];
+		
+		regions[region - 1].push_back(i);  // Store agent index, region - 1 for 0-based indexing
+	}
+
+	return regions;
+}
+
+int Ped::Model::getRegion(float x, float y) {
+	if (x >= 80 && y >= 60) {
+		return 1;  // First quadrant (Region 1)
+	} else if (x < 80 && y >= 60) {
+		return 2;  // Second quadrant (Region 2)
+	} else if (x < 80 && y < 60) {
+		return 3;  // Third quadrant (Region 3)
+	} else {
+		return 4;  // Fourth quadrant (Region 4)
+	}
+}
 // Moves the agent to the next desired position. If already taken, it will
 // be moved to a location close to it.
 void Ped::Model::move(int i)
@@ -208,6 +252,15 @@ void Ped::Model::move(int i)
 		// If the current position is not yet taken by any neighbor
 		if (std::find(takenPositions.begin(), takenPositions.end(), *it) == takenPositions.end()) {
 
+			int old_region = getRegion(agents->x[i],agents->y[i]);
+			int new_region = getRegion(((*it).first), ((*it).second));
+
+			if (old_region != new_region){
+				//lock and switch region
+				std::lock_guard<std::mutex> lock(regionMutex);
+				agents->regions[i] = new_region;
+
+			}
 			// Set the agent's position 
 			agents->x[i] = ((*it).first);
 			agents->y[i] = ((*it).second);

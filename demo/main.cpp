@@ -73,6 +73,7 @@ int main(int argc, char*argv[]) {
             {"cuda", no_argument, NULL, 'c'},
             {"simd", no_argument, NULL, 's'},
             {"omp", no_argument, NULL, 'o'},
+            {"ompmove", no_argument, NULL, 'b'},
             {"pthread", no_argument, NULL, 'p'},
             {"seq", no_argument, NULL, 'q'},
             {0, 0, 0, 0}  // End of options
@@ -123,6 +124,11 @@ int main(int argc, char*argv[]) {
                 // Handle --omp
                 std::cout << "Option --omp activated\n";
                 implementation_to_test = Ped::OMP;
+                break;
+            case 'b':
+                // Handle --omp without collision
+                std::cout << "Option --omp without collision activated\n";
+                implementation_to_test = Ped::OMPMOVE;
                 break;
             case 'p':
                 // Handle --pthread

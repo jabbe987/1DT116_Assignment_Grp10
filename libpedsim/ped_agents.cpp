@@ -4,7 +4,7 @@
 #include <cmath>
 #include <omp.h>
 
-void Ped::Tagents::addAgent(int posX, int posY, const std::vector<Ped::Twaypoint*>& agentWaypoints) {
+void Ped::Tagents::addAgent(int posX, int posY, const std::vector<Ped::Twaypoint*>& agentWaypoints, int region) {
     x.push_back(posX);
     y.push_back(posY);
     desiredX.push_back(posX);
@@ -16,6 +16,7 @@ void Ped::Tagents::addAgent(int posX, int posY, const std::vector<Ped::Twaypoint
     destinationX2.push_back(agentWaypoints.empty() ? posX : agentWaypoints.back()->getx());
     destinationY2.push_back(agentWaypoints.empty() ? posY : agentWaypoints.back()->gety());
     destinationR2.push_back(agentWaypoints.empty() ? 10 : agentWaypoints.back()->getr());
+    regions.push_back(region);
     // destinations.push_back(agentWaypoints.empty() ? nullptr : agentWaypoints.front());
     // waypoints.push_back(agentWaypoints);
 }
