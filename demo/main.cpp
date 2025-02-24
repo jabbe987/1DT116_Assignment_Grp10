@@ -74,8 +74,13 @@ int main(int argc, char*argv[]) {
             {"simd", no_argument, NULL, 's'},
             {"omp", no_argument, NULL, 'o'},
             {"ompmove", no_argument, NULL, 'b'},
+            {"pthreadmove", no_argument, NULL, 'n'},
+            {"ompsimd", no_argument, NULL, 'k'},
+            {"ompsimdmove", no_argument, NULL, 'z'},
+            {"pthreadsimd,", no_argument, NULL, 'l'},
             {"pthread", no_argument, NULL, 'p'},
             {"seq", no_argument, NULL, 'q'},
+            {"seqmove", no_argument, NULL, 'r'},
             {0, 0, 0, 0}  // End of options
         };
 
@@ -127,8 +132,28 @@ int main(int argc, char*argv[]) {
                 break;
             case 'b':
                 // Handle --omp without collision
-                std::cout << "Option --omp without collision activated\n";
+                std::cout << "Option --ompmove activated\n";
                 implementation_to_test = Ped::OMPMOVE;
+                break;
+            case 'k':
+                // Handle --omp without collision
+                std::cout << "Option --ompsimd activated\n";
+                implementation_to_test = Ped::OMPSIMD;
+                break;
+            case 'z':
+                // Handle --omp without collision
+                std::cout << "Option --ompsimdmove activated\n";
+                implementation_to_test = Ped::OMPSIMDMOVE;
+                break;
+            case 'l':
+                // Handle --omp without collision
+                std::cout << "Option --pthreadsimd activated\n";
+                implementation_to_test = Ped::PTHREADSIMD;
+                break;
+            case 'n':
+                // Handle --omp without collision
+                std::cout << "Option --pthreadmove activated\n";
+                implementation_to_test = Ped::PTHREADMOVE;
                 break;
             case 'p':
                 // Handle --pthread
@@ -139,6 +164,11 @@ int main(int argc, char*argv[]) {
                 // Handle --seq
                 std::cout << "Option --seq activated\n";
                 implementation_to_test = Ped::SEQ;
+                break;
+            case 'r':
+                // Handle --seq without collision
+                std::cout << "Option --seqmove activated\n";
+                implementation_to_test = Ped::SEQMOVE;
                 break;
             case 'm':
                 // Handle --max-steps with a numerical argument

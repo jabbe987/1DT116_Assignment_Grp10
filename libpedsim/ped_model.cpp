@@ -59,7 +59,17 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 
 void Ped::Model::tick()
 {
-    if (implementation == OMP) {
+	if (implementation == OMP) {
+		remainderSeq(0, agents->x.size());
+		std::vector<std::vector<int>> agentsInRegion = getAgentsByRegion();
+		for (size_t region = 0; region < agentsInRegion.size(); region++) {  
+			for (size_t j = 0; j < agentsInRegion[region].size(); j++) {
+				int agentIndex = agentsInRegion[region][j];  
+				move(agentIndex);
+			}
+		}
+	}
+    else if (implementation == OMPSIMD) {
 		
 		size_t numAgents = agents->x.size();
 		size_t simdLimit = numAgents / 8 * 8;
@@ -68,29 +78,63 @@ void Ped::Model::tick()
         for(size_t i = 0; i < simdLimit; i+=8) {
             agents->computeNextDesiredPositions(i);
         }
+
 		remainderSeq(simdLimit, numAgents);
+
+		// #pragma omp parallel for schedule(static)
 		for(size_t i = 0; i < agents->x.size(); i++) {
 			move(i);
 		}    
 	}
     
-	else if (implementation == OMPMOVE) {
-		
-			std::vector<std::vector<int>> agentsInRegion = getAgentsByRegion();
-			remainderSeq(0, agents->x.size()); 
-	
-			#pragma omp parallel for schedule(static)
-			for (size_t region = 0; region < agentsInRegion.size(); region++) {  
-				for (size_t j = 0; j < agentsInRegion[region].size(); j++) {
-					int agentIndex = agentsInRegion[region][j];  
-					move(agentIndex);
+	else if (implementation == OMPMOVE) {		
+		std::vector<std::vector<int>> agentsInRegion = getAgentsByRegion();
+		remainderSeq(0, agents->x.size()); 
+		#pragma omp parallel for schedule(static)
+		for (size_t region = 0; region < agentsInRegion.size(); region++) {  
+			for (size_t j = 0; j < agentsInRegion[region].size(); j++) {
+				int agentIndex = agentsInRegion[region][j];  
+				move(agentIndex);
+			}
 		}
-		}
-	
 	}
 		
-	  
-    else if (implementation == PTHREAD) {
+	else if (implementation == PTHREAD) {
+		remainderSeq(0, agents->x.size()); 
+
+		int numThreads = 4;
+		size_t numAgents = agents->x.size();
+		std::vector<std::thread> threads;
+
+		// Determine workload boundaries for each thread
+		size_t chunkSize = numAgents / numThreads;
+		size_t remainder = numAgents % numThreads;
+
+		size_t start = 0;
+
+		// Worker function: Each thread gets a pre-determined chunk
+		auto worker = [&](size_t start, size_t end) {
+            for (size_t i = start; i < end; i++) {
+				agents->x[i] = agents->desiredX[i];
+				agents->y[i] = agents->desiredY[i];
+            }
+        };
+
+		// Launch threads
+		for (size_t i = 0; i < numThreads; i++) {
+            size_t end = start + chunkSize + (i < remainder ? 1 : 0); // Distribute extra agents to first few threads
+            if (start < numAgents) {  // Avoid empty threads
+                threads.push_back(std::thread(worker, start, end));
+            }
+            start = end;
+        }
+
+		// Join threads
+		for (auto& t : threads) {
+			t.join();
+    	}
+	}
+    else if (implementation == PTHREADSIMD) {
 		int numThreads = 4;
 		size_t numAgents = agents->x.size();
 		size_t simdLimit = numAgents / 8 * 8;
@@ -148,19 +192,20 @@ void Ped::Model::tick()
 		}
 	}
 
-    else if (implementation == SEQ) {  // Default to serial
+	else if (implementation == SEQMOVE) {
 		remainderSeq(0, agents->x.size()); //struct of arrays version
-		
-
 
 		for(size_t i = 0; i < agents->x.size(); i++) {
 			move(i);
 		}
-        // for (Ped::Tagent* agent : agent_old) {
-        //     agent->computeNextDesiredPosition();
-        //     agent->setX(agent->getDesiredX());
-        //     agent->setY(agent->getDesiredY());
-        // }
+	}
+    else if (implementation == SEQ) {  // Default to serial
+		remainderSeq(0, agents->x.size()); //struct of arrays version
+
+		for(size_t i = 0; i < agents->x.size(); i++) {
+			agents->x[i] = agents->desiredX[i];
+			agents->y[i] = agents->desiredY[i];
+		}
 	}
 }
 
@@ -168,20 +213,78 @@ void Ped::Model::tick()
 
 
 void Ped::Model::remainderSeq(size_t start, size_t end) {
-	for (size_t i = start; i < end; i++) {
-		agents->getNextDestinationSeq(i);
-		double diffX = agents->destinationX[i] - agents->x[i];
-		double diffY = agents->destinationY[i] - agents->y[i];
-		double length = sqrtf(diffX * diffX + diffY * diffY);
-		diffX = agents->destinationX[i] - agents->x[i];
-		diffY = agents->destinationY[i] - agents->y[i];
-		length = sqrtf(diffX * diffX + diffY * diffY);
-		if(length < 0.0001) {
-			length = 0.1;
+	if (implementation == OMP || implementation == OMPMOVE) {
+		#pragma omp parallel for schedule(static)
+		for (size_t i = start; i < end; i++) {
+			agents->getNextDestinationSeq(i);
+			double diffX = agents->destinationX[i] - agents->x[i];
+			double diffY = agents->destinationY[i] - agents->y[i];
+			double length = sqrtf(diffX * diffX + diffY * diffY);
+			diffX = agents->destinationX[i] - agents->x[i];
+			diffY = agents->destinationY[i] - agents->y[i];
+			length = sqrtf(diffX * diffX + diffY * diffY);
+			if(length < 0.0001) {
+				length = 0.1;
+			}
+			agents->desiredX[i] = (int)round(agents->x[i] + (diffX / length));
+			agents->desiredY[i] = (int)round(agents->y[i] + (diffY / length));
 		}
-		agents->desiredX[i] = (int)round(agents->x[i] + (diffX / length));
-		agents->desiredY[i] = (int)round(agents->y[i] + (diffY / length));
 	}
+	else if (implementation == PTHREAD || implementation == PTHREADMOVE) {
+		size_t numAgents = agents->x.size();
+		int numThreads = 4;
+		std::vector<std::thread> threads;
+		size_t chunkSize = (end - start) / numThreads;
+		size_t remainder = (end - start) % numThreads;
+		size_t s = start;
+		auto worker = [&](size_t start, size_t end) {
+			for (size_t i = start; i < end; i++) {
+				agents->getNextDestinationSeq(i);
+				double diffX = agents->destinationX[i] - agents->x[i];
+				double diffY = agents->destinationY[i] - agents->y[i];
+				double length = sqrtf(diffX * diffX + diffY * diffY);
+				diffX = agents->destinationX[i] - agents->x[i];
+				diffY = agents->destinationY[i] - agents->y[i];
+				length = sqrtf(diffX * diffX + diffY * diffY);
+				if(length < 0.0001) {
+					length = 0.1;
+				}
+				agents->desiredX[i] = (int)round(agents->x[i] + (diffX / length));
+				agents->desiredY[i] = (int)round(agents->y[i] + (diffY / length));
+			}
+		};
+		for (int i = 0; i < numThreads; i++) {
+			size_t e = s + chunkSize;
+			if (remainder > 0) {
+				end++;
+				remainder--;
+			}
+			if (start < numAgents) {
+				threads.push_back(std::thread(worker, s, e));
+			}
+			s = e;
+		}
+		for (auto& t : threads) {
+			t.join();
+		}
+	}
+	else {
+		for (size_t i = start; i < end; i++) {
+			agents->getNextDestinationSeq(i);
+			double diffX = agents->destinationX[i] - agents->x[i];
+			double diffY = agents->destinationY[i] - agents->y[i];
+			double length = sqrtf(diffX * diffX + diffY * diffY);
+			diffX = agents->destinationX[i] - agents->x[i];
+			diffY = agents->destinationY[i] - agents->y[i];
+			length = sqrtf(diffX * diffX + diffY * diffY);
+			if(length < 0.0001) {
+				length = 0.1;
+			}
+			agents->desiredX[i] = (int)round(agents->x[i] + (diffX / length));
+			agents->desiredY[i] = (int)round(agents->y[i] + (diffY / length));
+		}
+	}
+	
 }
 
 std::vector<std::vector<int>> Ped::Model::getAgentsByRegion() {
@@ -215,19 +318,24 @@ void Ped::Model::move(int i)
 	// set<const Ped::Tagent *> neighbors = getNeighbors(agents->x[i], agents->y[i], 2);
 
 	// Retrieve their positions
+	// std::vector<std::pair<int, int> > takenPositions = getNeighbors(agents->x[i], agents->y[i], agents->regions[i], i);
+	int region = agents->regions[i];
+	// std::vector<std::vector<int>> agentsInRegion = getAgentsByRegion();
 	std::vector<std::pair<int, int> > takenPositions;
 	for (size_t j = 0; j < agents->x.size(); j++) {
+		// int index = agentsInRegion[region][j];
 		if (i == j) continue;
+		// if (agents->regions[j] != region) continue;
 		std::pair<int, int> position(agents->x[j], agents->y[j]);
 		takenPositions.push_back(position);
 	}
-
+	
 	// Compute the three alternative positions that would bring the agent
 	// closer to his desiredPosition, starting with the desiredPosition itself
 	std::vector<std::pair<int, int> > prioritizedAlternatives;
 	std::pair<int, int> pDesired(agents->desiredX[i], agents->desiredY[i]);
 	prioritizedAlternatives.push_back(pDesired);
-
+	
 	int diffX = pDesired.first - agents->x[i]; //feels wrong 
 	int diffY = pDesired.second - agents->y[i];
 	std::pair<int, int> p1, p2;
@@ -245,36 +353,78 @@ void Ped::Model::move(int i)
 	
 	prioritizedAlternatives.push_back(p1);
 	prioritizedAlternatives.push_back(p2);
-
+	
 	// Find the first empty alternative position
+	// std::mutex regionlock;
+	std::vector<std::mutex> regionLocks(4);
 	for (std::vector<pair<int, int> >::iterator it = prioritizedAlternatives.begin(); it != prioritizedAlternatives.end(); ++it) {
-
+		
 		// If the current position is not yet taken by any neighbor
 		if (std::find(takenPositions.begin(), takenPositions.end(), *it) == takenPositions.end()) {
-
+			
 			int old_region = getRegion(agents->x[i],agents->y[i]);
 			int new_region = getRegion(((*it).first), ((*it).second));
-
+			
 			if (old_region != new_region){
-				//lock and switch region
-				std::lock_guard<std::mutex> lock(regionMutex);
-				agents->regions[i] = new_region;
+				
+				std::lock_guard<std::mutex> lock_new(regionLocks[new_region - 1]);
+        		std::lock_guard<std::mutex> lock_old(regionLocks[old_region - 1]);
 
+				// regionlock.lock();
+				std::vector<std::pair<int, int> > takenPositionsNew;
+				for (size_t j = 0; j < agents->x.size(); j++) {
+					// int index = agentsInRegion[region][j];
+					if (i == j) continue;
+					// if (agents->regions[j] != region) continue;
+					std::pair<int, int> position(agents->x[j], agents->y[j]);
+					takenPositionsNew.push_back(position);
+				}
+
+				if (std::find(takenPositionsNew.begin(), takenPositionsNew.end(), *it) == takenPositionsNew.end()) {
+					// std::cout << "Region switch: " << old_region << " -> " << new_region << std::endl;
+					agents->regions[i] = new_region;
+					agents->x[i] = ((*it).first);
+					agents->y[i] = ((*it).second);
+
+				}
+				else{
+					std::cout << "Region switch failed" << std::endl;
+				}
+
+				// agents->regions[i] = new_region;
+				// agents->x[i] = ((*it).first);
+				// agents->y[i] = ((*it).second);
+				// regionlock.unlock();
 			}
-			// Set the agent's position 
-			agents->x[i] = ((*it).first);
-			agents->y[i] = ((*it).second);
+			else{
+				// Set the agent's position 
+				agents->x[i] = ((*it).first);
+				agents->y[i] = ((*it).second);
+			}
 		
 			break;
 		}
 	}
 }
 
-set<const Ped::Tagent*> Ped::Model::getNeighbors(int x, int y, int dist) const {
+std::vector<std::pair<int, int> > Ped::Model::getNeighbors(int x, int y, int region, int index) {
 
 	// create the output list
 	// ( It would be better to include only the agents close by, but this programmer is lazy.)	
-	return set<const Ped::Tagent*>(agent_old.begin(), agent_old.end());
+		// Retrieve their positions
+	// Retrieve their positions
+	std::vector<std::vector<int>> agentsInRegion = getAgentsByRegion();
+
+	std::vector<std::pair<int, int> > takenPositions;
+
+	for (size_t j = 0; j < agentsInRegion[region].size(); j++) {
+		int i = agentsInRegion[region][j];
+		if (index == i) continue;
+		std::pair<int, int> position(agents->x[i], agents->y[i]);
+		takenPositions.push_back(position);
+	}
+
+	return takenPositions;
 }
 ////////////
 /// Everything below here relevant for Assignment 3.
@@ -286,7 +436,7 @@ set<const Ped::Tagent*> Ped::Model::getNeighbors(int x, int y, int dist) const {
 void Ped::Model::move_old(Ped::Tagent *agent)
 {
 	// Search for neighboring agents
-	set<const Ped::Tagent *> neighbors = getNeighbors(agent->getX(), agent->getY(), 2);
+	set<const Ped::Tagent *> neighbors = getNeighbors_old(agent->getX(), agent->getY(), 2);
 
 	// Retrieve their positions
 	std::vector<std::pair<int, int> > takenPositions;
