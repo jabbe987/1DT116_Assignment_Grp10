@@ -36,7 +36,7 @@ namespace Ped{
 		// Coordinates a time step in the scenario: move all agents by one step (if applicable).
 		void tick();
 
-		void remainderSeq(size_t start, size_t end);
+		void computeNext(size_t start, size_t end);
 
 		std::vector<std::vector<int>> getAgentsByRegion();
 
@@ -75,7 +75,11 @@ namespace Ped{
 		// Moves an agent towards its next position
 		void move_old(Ped::Tagent *agent);
 
-		void move(int i);
+		void move(int i, int region, int regionIndex);
+
+		void moveSeq(int i);
+
+		void forceMove();
 		////////////
 		/// Everything below here won't be relevant until Assignment 3
 		///////////////////////////////////////////////

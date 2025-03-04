@@ -16,12 +16,36 @@ void Ped::Tagents::addAgent(int posX, int posY, const std::vector<Ped::Twaypoint
     destinationX2.push_back(agentWaypoints.empty() ? posX : agentWaypoints.back()->getx());
     destinationY2.push_back(agentWaypoints.empty() ? posY : agentWaypoints.back()->gety());
     destinationR2.push_back(agentWaypoints.empty() ? 10 : agentWaypoints.back()->getr());
-    regions.push_back(region);
+    //print hello
+    // std::cout << "Hello from addAgent" << std::endl;
+    // std::cout << "Region: " << region << std::endl;
+    // std::cout << "x size: " << x.size() << std::endl;
+    
+    regions[region].push_back(x.size()-1);
+    // std::cout << "Hello" << std::endl;
+
+    // if(region==1)
+    // {
+    //     region1.push_back(x.size()-1);
+    // }
+    // else if(region==2)
+    // {
+    //     region2.push_back(x.size()-1);
+    // }
+    // else if(region==3)
+    // {
+    //     region3.push_back(x.size()-1);
+    // }
+    // else if(region == 4)
+    // {
+    //     region4.push_back(x.size()-1);
+    // }
+    // regions.push_back(region);
     // destinations.push_back(agentWaypoints.empty() ? nullptr : agentWaypoints.front());
     // waypoints.push_back(agentWaypoints);
 }
 
-void Ped::Tagents::computeNextDesiredPositions(int i) {
+void Ped::Tagents::computeNextSimd(int i) {
 
     __m256 xVec = _mm256_loadu_ps(&x[i]);
     __m256 yVec = _mm256_loadu_ps(&y[i]);
