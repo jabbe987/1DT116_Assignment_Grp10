@@ -413,6 +413,7 @@ std::vector<int> Ped::Model::closeRegions(int x, int y, int region) {
 // be moved to a location close to it.
 void Ped::Model::move(int i, int region, int regionIndex)
 {	
+ //TODO read utan lock...
 	int x = agents->x[i];
 	int y = agents->y[i];
 
@@ -478,6 +479,7 @@ void Ped::Model::move(int i, int region, int regionIndex)
 				// agents->regions[new_region].push_back(i);
 				// agents->regions[region].erase(agents->regions[region].begin() + regionIndex);
 				
+				// TODO utan lock och ha en buffer per region
 				std::lock_guard<std::mutex> bufLock(bufferMutex);
 				regionBuffer.emplace_back(i, regionIndex, new_region, region);
 
