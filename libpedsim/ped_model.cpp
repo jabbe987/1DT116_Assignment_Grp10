@@ -60,7 +60,60 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 std::vector<std::tuple<int,int,int,int>> regionBuffer;  // Stores (agentIndex, regionIndex, new_region, old_region) pairs
 std::mutex bufferMutex;  // Mutex for the buffer
 
+bool Ped::Model::validateRegions() {
+    bool valid = true;
+    
+    // Lock to prevent concurrent modification during validation
+    std::lock_guard<std::mutex> lock(agents->agentsMutex);
+    
+    // Create a temporary region map to validate against
+    std::vector<std::vector<int>> tempRegions(4);
+    
+    // Populate tempRegions based on the actual positions
+    for (size_t i = 0; i < agents->x.size(); ++i) {
+        int currentRegion = getRegion(agents->x[i], agents->y[i]);
+        tempRegions[currentRegion].push_back(i);
+    }
+
+	// Sort both tempRegions and agents->regions for comparison
+    for (int region = 0; region < 4; ++region) {
+        std::sort(tempRegions[region].begin(), tempRegions[region].end());
+        std::sort(agents->regions[region].begin(), agents->regions[region].end());
+    }
+    
+    // Compare tempRegions with agents->regions
+    for (int region = 0; region < 4; ++region) {
+        if (tempRegions[region] != agents->regions[region]) {
+            std::cout << "Mismatch in region " << region << "!" << std::endl;
+            std::cout << "Expected: ";
+            for (int idx : tempRegions[region]) {
+                std::cout << idx << " ";
+            }
+            std::cout << "\nFound: ";
+            for (int idx : agents->regions[region]) {
+                std::cout << idx << " ";
+            }
+            std::cout << std::endl;
+            valid = false;
+        }
+    }
+    
+    if (valid) {
+        // std::cout << "All regions are valid." << std::endl;
+    } else {
+        std::cout << "Region validation failed!" << std::endl;
+    }
+    
+    return valid;
+}
+
+
 void Ped::Model::tick(){
+
+	// bool regionsValid = validateRegions();
+	// if (!regionsValid) {
+	// 	std::cerr << "Regions are not valid at the start of tick!" << std::endl;
+	// }
 	
 	if (implementation == OMP) {
 		computeNext(0, agents->x.size());
@@ -397,13 +450,13 @@ int Ped::Model::getRegion(int x, int y) {
 
 std::vector<int> Ped::Model::closeRegions(int x, int y, int region) {
 	std::vector<int> regions;
-	if (x >= 78 && y >= 58 && region != 0) {
+	if (x >= 77 && y >= 57 && region != 0) {
 		regions.push_back(0);  // First quadrant (Region 1)
-	} else if (x < 82 && y >= 58 && region != 1) {	
+	} if (x < 83 && y >= 57 && region != 1) {	
 		regions.push_back(1);  // Second quadrant (Region 2)
-	} else if (x < 82 && y < 62 && region != 2) {
+	} if (x < 83 && y < 63 && region != 2) {
 		regions.push_back(2);  // Third quadrant (Region 3)
-	} else if (x >= 78 && y < 62 && region != 3) {
+	} if (x >= 77 && y < 63 && region != 3) {
 		regions.push_back(3);  // Fourth quadrant (Region 4)
     }
 	return regions;
@@ -416,21 +469,6 @@ void Ped::Model::move(int i, int region, int regionIndex)
  //TODO read utan lock...
 	int x = agents->x[i];
 	int y = agents->y[i];
-
-	std::vector<int> lockList = closeRegions(x, y, region);
-	lockList.push_back(region);
-	// lockList.push_back(0);
-	// lockList.push_back(1);
-	// lockList.push_back(2);
-	// lockList.push_back(3);
-	std::sort(lockList.begin(), lockList.end());
-	lockList.erase(std::unique(lockList.begin(), lockList.end()), lockList.end());
-
-	std::vector<std::unique_lock<std::mutex>> locks;
-	locks.reserve(lockList.size());
-	for (int r : lockList) {
-		locks.emplace_back(agents->regionLocks[r]); 
-	}
 
 	// Compute the three alternative positions that would bring the agent
 	// closer to his desiredPosition, starting with the desiredPosition itself
@@ -456,6 +494,20 @@ void Ped::Model::move(int i, int region, int regionIndex)
 	prioritizedAlternatives.push_back(p1);
 	prioritizedAlternatives.push_back(p2);
 
+	std::vector<int> lockList = closeRegions(x, y, region);
+
+	lockList.push_back(region);
+
+	std::sort(lockList.begin(), lockList.end());
+	lockList.erase(std::unique(lockList.begin(), lockList.end()), lockList.end());
+
+	std::vector<std::unique_lock<std::mutex>> locks;
+	locks.reserve(lockList.size());
+	for (int r : lockList) {
+		locks.emplace_back(agents->regionLocks[r]); 
+	}
+
+	// lockList.push_back(region);
 	std::vector<std::pair<int, int> > takenPositions;
 	for (int nr : lockList) {
 		// std::lock_guard<std::mutex> neighborLock(agents->regionLocks[nr]);
@@ -467,6 +519,11 @@ void Ped::Model::move(int i, int region, int regionIndex)
 		}
 	}
 
+	// for (auto &lock : locks) {
+	// 	lock.unlock();  // Explicitly release each lock
+	// }
+
+	// locks.clear();
 	
 	for (std::vector<pair<int, int> >::iterator it = prioritizedAlternatives.begin(); it != prioritizedAlternatives.end(); ++it) {
 
@@ -476,13 +533,11 @@ void Ped::Model::move(int i, int region, int regionIndex)
 		if (region != new_region){
 
 			if (std::find(takenPositions.begin(), takenPositions.end(), *it) == takenPositions.end()) {
-				// agents->regions[new_region].push_back(i);
-				// agents->regions[region].erase(agents->regions[region].begin() + regionIndex);
 				
 				// TODO utan lock och ha en buffer per region
 				std::lock_guard<std::mutex> bufLock(bufferMutex);
 				regionBuffer.emplace_back(i, regionIndex, new_region, region);
-
+				
 				agents->x[i] = ((*it).first);
 				agents->y[i] = ((*it).second);
 				break;
@@ -491,7 +546,10 @@ void Ped::Model::move(int i, int region, int regionIndex)
 		}
 
 		else{
+
 			if (std::find(takenPositions.begin(), takenPositions.end(), *it) == takenPositions.end()) {
+				// locks.emplace_back(agents->regionLocks[region]);
+
 				agents->x[i] = ((*it).first);
 				agents->y[i] = ((*it).second);
 				break;

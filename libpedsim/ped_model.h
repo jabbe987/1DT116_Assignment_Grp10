@@ -42,6 +42,8 @@ namespace Ped{
 
 		int getRegion(int x, int y);
 
+		bool validateRegions();
+
 		// Returns the agents of this scenario
 		const std::vector<Tagent*>& getAgents() const { return agent_old; };
 
