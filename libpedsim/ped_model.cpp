@@ -83,6 +83,7 @@ void Ped::Model::tick(){
     
 	else if (implementation == OMPMOVE) {		
 		computeNext(0, agents->x.size());
+		// updateHeatmapSeq();
 		omp_set_num_threads(4);
 		#pragma omp parallel for schedule(static)
 		for (size_t region = 0; region < agents->regions.size(); region++) {  
@@ -222,6 +223,7 @@ void Ped::Model::tick(){
 	}
     else if (implementation == SEQ) {  // Default to serial
 		computeNext(0, agents->x.size()); //struct of arrays version
+		// updateHeatmapSeq();
 
 		for(size_t i = 0; i < agents->x.size(); i++) {
 			agents->x[i] = agents->desiredX[i];
