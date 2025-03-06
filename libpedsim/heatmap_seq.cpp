@@ -53,7 +53,7 @@ void Ped::Model::updateHeatmapSeq()
 	}
 
 	// Count how many agents want to go to each location
-	for (int i = 0; i <agents->x.size();i++)
+	for (int i = 0; i < agents->x.size(); i++)
 	{
 		//Ped::Tagent* agent = agents->desiredX[i];
 		int x = agents->desiredX[i];
