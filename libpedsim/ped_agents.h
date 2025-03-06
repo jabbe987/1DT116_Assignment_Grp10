@@ -23,6 +23,7 @@ namespace Ped {
         // std::vector<int> region; // 11, 27,103 
         std::vector<std::vector<int>> regions = std::vector<std::vector<int>>(4);  // Assuming 4 regions (1 to 4)
         std::mutex agentsMutex; 
+        std::vector<std::mutex> regionLocks = std::vector<std::mutex>(4);
         // std::vector<std::mutex> regionLocks = std::vector<std::mutex>(4); // One mutex per region
 
         /* std::vector<int> region1;

@@ -40,7 +40,9 @@ namespace Ped{
 
 		std::vector<std::vector<int>> getAgentsByRegion();
 
-		int getRegion(float x, float y);
+		int getRegion(int x, int y);
+
+		bool validateRegions();
 
 		// Returns the agents of this scenario
 		const std::vector<Tagent*>& getAgents() const { return agent_old; };
@@ -76,6 +78,8 @@ namespace Ped{
 		void move_old(Ped::Tagent *agent);
 
 		void move(int i, int region, int regionIndex);
+
+		std::vector<int> closeRegions(int x, int y, int region);
 
 		void moveSeq(int i);
 
