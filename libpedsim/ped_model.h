@@ -111,6 +111,11 @@ namespace Ped{
 
 		void setupHeatmapSeq();
 		void updateHeatmapSeq();
+
+
+		void setupHeatmap();
+		void updateHeatmap();
+		void scaleHeatmapCUDA();
 	};
 }
 #endif

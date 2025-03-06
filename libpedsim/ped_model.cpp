@@ -54,7 +54,7 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 	this->implementation = implementation;
 
 	// Set up heatmap (relevant for Assignment 4)
-	setupHeatmapSeq();
+	setupHeatmap();
 }
 
 std::vector<std::tuple<int,int,int,int>> regionBuffer;  // Stores (agentIndex, regionIndex, new_region, old_region) pairs
@@ -136,6 +136,7 @@ void Ped::Model::tick(){
     
 	else if (implementation == OMPMOVE) {		
 		computeNext(0, agents->x.size());
+		updateHeatmap();
 		omp_set_num_threads(4);
 		#pragma omp parallel for schedule(static)
 		for (size_t region = 0; region < agents->regions.size(); region++) {  
@@ -268,33 +269,41 @@ void Ped::Model::tick(){
 
 	else if (implementation == SEQMOVE) {
 		computeNext(0, agents->x.size()); //struct of arrays version
-
+		updateHeatmapSeq();
 		for(size_t i = 0; i < agents->x.size(); i++) {
 			moveSeq(i);
 		}
 	}
-    else if (implementation == SEQ) {  // Default to serial
+	else if (implementation == SEQ) {
 		computeNext(0, agents->x.size()); //struct of arrays version
-
+		updateHeatmap();
 		for(size_t i = 0; i < agents->x.size(); i++) {
-			agents->x[i] = agents->desiredX[i];
-			agents->y[i] = agents->desiredY[i];
+			moveSeq(i);
 		}
 	}
+    // else if (implementation == SEQ) {  // Default to serial
+	// 	computeNext(0, agents->x.size()); //struct of arrays version
+
+	// 	for(size_t i = 0; i < agents->x.size(); i++) {
+	// 		agents->x[i] = agents->desiredX[i];
+	// 		agents->y[i] = agents->desiredY[i];
+	// 	}
+	// }
+	if (implementation != SEQMOVE) {
+		std::lock_guard<std::mutex> lock(agents->agentsMutex);  // Lock global mutex for safe update
+		for (int i = regionBuffer.size() - 1; i >= 0; i--) {
+			// int agentIndex = regionBuffer[i][0];
+			// int regionIndex = regionBuffer[i][1];
+			// int new_region = regionBuffer[i][2];
+			// int old_region = regionBuffer[i][3];
+			auto &[agentIndex, regionIndex, new_region, old_region] = regionBuffer[i];
 	
-	std::lock_guard<std::mutex> lock(agents->agentsMutex);  // Lock global mutex for safe update
-    for (int i = regionBuffer.size() - 1; i >= 0; i--) {
-        // int agentIndex = regionBuffer[i][0];
-		// int regionIndex = regionBuffer[i][1];
-        // int new_region = regionBuffer[i][2];
-        // int old_region = regionBuffer[i][3];
-		auto &[agentIndex, regionIndex, new_region, old_region] = regionBuffer[i];
-
-		agents->regions[new_region].push_back(agentIndex);
-		agents->regions[old_region].erase(agents->regions[old_region].begin() + regionIndex);
-
-    }
-    regionBuffer.clear();  // Clear buffer for next tick
+			agents->regions[new_region].push_back(agentIndex);
+			agents->regions[old_region].erase(agents->regions[old_region].begin() + regionIndex);
+	
+		}
+		regionBuffer.clear();  // Clear buffer for next tick
+	}
 }
 
 
