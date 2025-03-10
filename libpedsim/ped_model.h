@@ -17,7 +17,6 @@
 
 #include "ped_agent.h"
 #include "ped_agents.h"
-#include <cuda_runtime.h>
 
 namespace Ped{
 	class Tagent;
@@ -115,9 +114,9 @@ namespace Ped{
 
 
 		void setupHeatmap();
-		void updateHeatmap(cudaStream_t stream);
-		void scaleHeatmapCUDA(cudaStream_t stream);
-		void applyBlurFilterCUDA(cudaStream_t stream);
+		void updateHeatmap();
+		void scaleHeatmapCUDA();
+		void applyBlurFilterCUDA();
 
 		
 

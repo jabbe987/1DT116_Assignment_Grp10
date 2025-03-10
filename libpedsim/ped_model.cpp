@@ -153,7 +153,7 @@ void Ped::Model::tick(){
 		cudaEventCreate(&stop);
 		cudaEventRecord(start, stream);
 
-		updateHeatmap(stream);
+		updateHeatmap();
 		
 		auto start_cpu = std::chrono::high_resolution_clock::now();
 		#pragma omp parallel for schedule(static)
@@ -195,10 +195,8 @@ void Ped::Model::tick(){
 			std::cout << "Difference: " << (cpuTimeMs + gpuTimeMs - totalTimeMs) << " ms" << std::endl;
 		} else {
 			std::cout << "No parallel execution. (Total Time >= CPU + GPU Time)" << std::endl;
-			std::cout << "Difference: " << (cpuTimeMs + gpuTimeMs - totalTimeMs) << " ms \n" << std::endl;
+			std::cout << "Difference: " << (cpuTimeMs + gpuTimeMs - totalTimeMs) << " ms" << std::endl;
 		}
-
-
 	}
 	
 	else if (implementation == OMPSIMDMOVE){
