@@ -169,7 +169,7 @@ void Ped::Model::scaleHeatmapCUDA() {
 
     // Allocate a contiguous host array for the scaled heatmap.
     int *shm_flat = (int*)malloc(numScaled * sizeof(int));
-    cudaMemcpy(shm_flat, d_scaled, numScaled * sizeof(int), cudaMemcpyDeviceToHost;
+    cudaMemcpy(shm_flat, d_scaled, numScaled * sizeof(int), cudaMemcpyDeviceToHost);
 
     cudaDeviceSynchronize();
 
