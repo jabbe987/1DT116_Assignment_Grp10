@@ -19,6 +19,7 @@
 #include <immintrin.h>
 #include <xmmintrin.h>
 #include <mutex>
+#include "cuda_runtime.h"
 // std::mutex regionMutex;  // Global mutex for region updates
 
 #ifndef NOCDUA
@@ -54,7 +55,8 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 	this->implementation = implementation;
 
 	// Set up heatmap (relevant for Assignment 4)
-	setupHeatmap();
+	setupHeatmapSeq();
+	// setupHeatmap();
 }
 
 std::vector<std::tuple<int,int,int,int>> regionBuffer;  // Stores (agentIndex, regionIndex, new_region, old_region) pairs
@@ -123,21 +125,37 @@ void Ped::Model::tick(){
 		
 		size_t numAgents = agents->x.size();
 		size_t simdLimit = numAgents / 8 * 8;
-		omp_set_num_threads(6);
+		omp_set_num_threads(8);
 		#pragma omp parallel for schedule(static)
         for(size_t i = 0; i < simdLimit; i+=8) {
+
             agents->computeNextSimd(i);
         }
-
 		computeNext(simdLimit, numAgents);
 
 		forceMove();
 	}
     
 	else if (implementation == OMPMOVE) {		
+
+		omp_set_num_threads(8);
 		computeNext(0, agents->x.size());
-		updateHeatmap();
-		omp_set_num_threads(4);
+
+		auto total_start = std::chrono::high_resolution_clock::now();
+
+		// Create CUDA stream for asynchronous execution
+		cudaStream_t stream;
+		cudaStreamCreate(&stream);
+	
+		// Start GPU timing with CUDA stream
+		cudaEvent_t start, stop;
+		cudaEventCreate(&start);
+		cudaEventCreate(&stop);
+		cudaEventRecord(start, stream);
+
+		updateHeatmap(stream);
+		
+		auto start_cpu = std::chrono::high_resolution_clock::now();
 		#pragma omp parallel for schedule(static)
 		for (size_t region = 0; region < agents->regions.size(); region++) {  
 			for (size_t j = 0; j < agents->regions[region].size(); j++) {
@@ -145,18 +163,55 @@ void Ped::Model::tick(){
 				move(agentIndex, region, j);
 			}
 		}
+
+		// Ensure GPU tasks complete
+		cudaEventRecord(stop, stream);
+		cudaEventSynchronize(stop);
+	
+		float gpuTime = 0;
+		cudaEventElapsedTime(&gpuTime, start, stop);
+		std::cout << "GPU Time: " << gpuTime << " ms" << std::endl;
+	
+		cudaEventDestroy(start);
+		cudaEventDestroy(stop);
+		cudaStreamDestroy(stream);
+
+		auto stop_cpu = std::chrono::high_resolution_clock::now();
+		auto total_stop = std::chrono::high_resolution_clock::now();
+
+		auto duration_cpu = std::chrono::duration_cast<std::chrono::milliseconds>(stop_cpu - start_cpu);
+		std::cout << "CPU Time: " << duration_cpu.count() << " ms" << std::endl;
+
+		
+		auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(total_stop - total_start);
+		std::cout << "Total Time: " << total_duration.count() << " ms" << std::endl;
+
+		float totalTimeMs = static_cast<float>(total_duration.count());
+		float cpuTimeMs = static_cast<float>(duration_cpu.count());
+		float gpuTimeMs = gpuTime;
+
+		if (totalTimeMs < (cpuTimeMs + gpuTimeMs)) {
+			std::cout << "Parallel execution confirmed! (Total Time < CPU + GPU Time)" << std::endl;
+			std::cout << "Difference: " << (cpuTimeMs + gpuTimeMs - totalTimeMs) << " ms" << std::endl;
+		} else {
+			std::cout << "No parallel execution. (Total Time >= CPU + GPU Time)" << std::endl;
+			std::cout << "Difference: " << (cpuTimeMs + gpuTimeMs - totalTimeMs) << " ms \n" << std::endl;
+		}
+
+
 	}
 	
 	else if (implementation == OMPSIMDMOVE){
 		size_t numAgents = agents->x.size();
 		size_t simdLimit = numAgents / 8 * 8;
-		omp_set_num_threads(6);
+		omp_set_num_threads(8);
 		#pragma omp parallel for schedule(static)
         for(size_t i = 0; i < simdLimit; i+=8) {
             agents->computeNextSimd(i);
         }
 
 		computeNext(simdLimit, numAgents);
+		// updateHeatmap();
 
 		for (size_t region = 0; region < agents->regions.size(); region++) {  
 			for (size_t j = 0; j < agents->regions[region].size(); j++) {
@@ -276,7 +331,7 @@ void Ped::Model::tick(){
 	}
 	else if (implementation == SEQ) {
 		computeNext(0, agents->x.size()); //struct of arrays version
-		updateHeatmap();
+		updateHeatmapSeq();
 		for(size_t i = 0; i < agents->x.size(); i++) {
 			moveSeq(i);
 		}
@@ -289,7 +344,7 @@ void Ped::Model::tick(){
 	// 		agents->y[i] = agents->desiredY[i];
 	// 	}
 	// }
-	if (implementation != SEQMOVE) {
+	if (implementation != SEQMOVE && implementation != SEQ) {
 		std::lock_guard<std::mutex> lock(agents->agentsMutex);  // Lock global mutex for safe update
 		for (int i = regionBuffer.size() - 1; i >= 0; i--) {
 			// int agentIndex = regionBuffer[i][0];

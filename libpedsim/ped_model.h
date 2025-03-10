@@ -17,6 +17,7 @@
 
 #include "ped_agent.h"
 #include "ped_agents.h"
+#include <cuda_runtime.h>
 
 namespace Ped{
 	class Tagent;
@@ -96,7 +97,7 @@ namespace Ped{
 		/// Everything below here won't be relevant until Assignment 4
 		///////////////////////////////////////////////
 
-#define SIZE 1024
+#define SIZE 512
 #define CELLSIZE 5
 #define SCALED_SIZE SIZE*CELLSIZE
 
@@ -114,8 +115,12 @@ namespace Ped{
 
 
 		void setupHeatmap();
-		void updateHeatmap();
-		void scaleHeatmapCUDA();
+		void updateHeatmap(cudaStream_t stream);
+		void scaleHeatmapCUDA(cudaStream_t stream);
+		void applyBlurFilterCUDA(cudaStream_t stream);
+
+		
+
 	};
 }
 #endif
