@@ -120,6 +120,12 @@ void Ped::Model::updateHeatmapSeq()
 			blurred_heatmap[i][j] = 0x00FF0000 | value << 24;
 		}
 	}
+	for (int i = 50; i < 60; i++) {
+        for (int j = 70; j < 80; j++) {
+            cout << scaled_heatmap[i][j] << " ";
+        }
+        cout << endl;
+    }
 }
 
 int Ped::Model::getHeatmapSize() const {

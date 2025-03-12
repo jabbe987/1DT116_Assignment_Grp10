@@ -55,8 +55,8 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 	this->implementation = implementation;
 
 	// Set up heatmap (relevant for Assignment 4)
-	setupHeatmapSeq();
-	// setupHeatmap();
+	// setupHeatmapSeq();
+	setupHeatmap();
 }
 
 std::vector<std::tuple<int,int,int,int>> regionBuffer;  // Stores (agentIndex, regionIndex, new_region, old_region) pairs
@@ -141,7 +141,7 @@ void Ped::Model::tick(){
 		omp_set_num_threads(8);
 		computeNext(0, agents->x.size());
 
-		auto total_start = std::chrono::high_resolution_clock::now();
+		// auto total_start = std::chrono::high_resolution_clock::now();
 
 		// Create CUDA stream for asynchronous execution
 		// cudaStream_t stream;
