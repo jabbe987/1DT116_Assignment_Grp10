@@ -7,6 +7,7 @@
 #include "ped_agent.h"
 #include "cuda_runtime.h"
 #include "ped_agents.h"
+#include "device_launch_parameters.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -23,6 +24,11 @@ using namespace std;
 // The input 'd_heatmap' is a 1D array representing the original heatmap of size SIZE x SIZE.
 // The output 'd_scaled' is a 1D array for the scaled heatmap of size SCALED_SIZE x SCALED_SIZE,
 // where SCALED_SIZE = SIZE * CELLSIZE.
+
+inline void safe_call(cudaError_t err) {
+    if (err != cudaSuccess) {
+        cerr << "CUDA error: " << cudaGetErrorString(err) << endl
+}
 
 // CUDA kernel for Gaussian blur filter using shared memory
 __global__ void blurHeatmapKernel(const int *d_scaled_heatmap, int *d_blurred_heatmap, int width, const int *d_weights) {
@@ -84,12 +90,12 @@ __global__ void scaleHeatmapKernel(const int *d_heatmap, int *d_scaled, int size
 }
 
 
-__global__ void initializeHeatmap(int *hm, int *shm, int *bhm, int size, int scaled_size) {
+__global__ void initializeHeatmap(int *hm, int *shm, int *bhm, int length, int scaled_length) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < size * size) {
+    if (idx < length) {
         hm[idx] = 0;
     }
-    if (idx < scaled_size * scaled_size) {
+    if (idx < scaled_length) {
         shm[idx] = 0;
         bhm[idx] = 0;
     }
@@ -98,19 +104,22 @@ __global__ void initializeHeatmap(int *hm, int *shm, int *bhm, int size, int sca
 void Ped::Model::setupHeatmap() {
     int *d_hm, *d_shm, *d_bhm;
 
+    int length = SIZE * SIZE;
+    int scaled_length = SCALED_SIZE * SCALED_SIZE;
+
     // Allocate GPU memory
-    cudaMalloc((void**)&d_hm, SIZE * SIZE * sizeof(int));
-    cudaMalloc((void**)&d_shm, SCALED_SIZE * SCALED_SIZE * sizeof(int));
-    cudaMalloc((void**)&d_bhm, SCALED_SIZE * SCALED_SIZE * sizeof(int));
+    safe_call(cudaMalloc((void**)&d_hm, SIZE * SIZE * sizeof(int)));
+    safe_call(cudaMalloc((void**)&d_shm, SCALED_SIZE * SCALED_SIZE * sizeof(int)));
+    safe_call(cudaMalloc((void**)&d_bhm, SCALED_SIZE * SCALED_SIZE * sizeof(int)));
 
     // Define thread block and grid sizes
-    int threadsPerBlock = 256;
-    int totalElements = max(SIZE * SIZE, SCALED_SIZE * SCALED_SIZE);
+    int threadsPerBlock = THREADSPERBLOCK;
+    int totalElements = max(length, scaled_length);
     int numBlocks = (totalElements + threadsPerBlock - 1) / threadsPerBlock;
 
     // Launch the CUDA kernel
-    initializeHeatmap<<<numBlocks, threadsPerBlock>>>(d_hm, d_shm, d_bhm, SIZE, SCALED_SIZE);
-
+    initializeHeatmap<<<numBlocks, threadsPerBlock>>>(d_hm, d_shm, d_bhm, length, scaled_length);
+    safe_call(cudaDeviceSynchronize());
     // Allocate host memory and set up pointers
     int *hm = (int*)malloc(SIZE * SIZE * sizeof(int));
     int *shm = (int*)malloc(SCALED_SIZE * SCALED_SIZE * sizeof(int));
@@ -121,9 +130,9 @@ void Ped::Model::setupHeatmap() {
     blurred_heatmap = (int**)malloc(SCALED_SIZE * sizeof(int*));
 
     // Copy initialized data from GPU to CPU
-    cudaMemcpy(hm, d_hm, SIZE * SIZE * sizeof(int), cudaMemcpyDeviceToHost);
-    cudaMemcpy(shm, d_shm, SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
-    cudaMemcpy(bhm, d_bhm, SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
+    safe_call(cudaMemcpy(hm, d_hm, SIZE * SIZE * sizeof(int), cudaMemcpyDeviceToHost));
+    safe_call(cudaMemcpy(shm, d_shm, SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyDeviceToHost));
+    safe_call(cudaMemcpy(bhm, d_bhm, SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyDeviceToHost));
 
     // Set up 2D pointers
     for (int i = 0; i < SIZE; i++) {
@@ -135,9 +144,9 @@ void Ped::Model::setupHeatmap() {
     }
 
     // Free GPU memory
-    cudaFree(d_hm);
-    cudaFree(d_shm);
-    cudaFree(d_bhm);
+    safe_call(cudaFree(d_hm));
+    safe_call(cudaFree(d_shm));
+    safe_call(cudaFree(d_bhm));
 }
 
 void Ped::Model::scaleHeatmapCUDA() {
@@ -153,23 +162,23 @@ void Ped::Model::scaleHeatmapCUDA() {
 
     // Allocate GPU memory.
     int *d_heatmap, *d_scaled;
-    cudaMalloc((void**)&d_heatmap, numOrig * sizeof(int));
-    cudaMalloc((void**)&d_scaled, numScaled * sizeof(int));
+    safe_call(cudaMalloc((void**)&d_heatmap, numOrig * sizeof(int)));
+    safe_call(cudaMalloc((void**)&d_scaled, numScaled * sizeof(int)));
 
     // Copy the original heatmap to device.
     // cudaMemcpy(d_heatmap, hm_flat, numOrig * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_heatmap, hm_flat, numOrig * sizeof(int), cudaMemcpyHostToDevice);
+    safe_call(cudaMemcpy(d_heatmap, hm_flat, numOrig * sizeof(int), cudaMemcpyHostToDevice));
 
 
     // Launch the scaling kernel.
-    int threadsPerBlock = 256;
+    int threadsPerBlock = THREADSPERBLOCK;
     int blocks = (numScaled + threadsPerBlock - 1) / threadsPerBlock;
     scaleHeatmapKernel<<<blocks, threadsPerBlock>>>(d_heatmap, d_scaled, SIZE, CELLSIZE);
-
+    cudaDeviceSynchronize();
 
     // Allocate a contiguous host array for the scaled heatmap.
     int *shm_flat = (int*)malloc(numScaled * sizeof(int));
-    cudaMemcpy(shm_flat, d_scaled, numScaled * sizeof(int), cudaMemcpyDeviceToHost);
+    safe_call(cudaMemcpy(shm_flat, d_scaled, numScaled * sizeof(int), cudaMemcpyDeviceToHost));
 
     cudaDeviceSynchronize();
 
@@ -182,8 +191,8 @@ void Ped::Model::scaleHeatmapCUDA() {
     // Free temporary memory.
     free(hm_flat);
     // Do not free shm_flat here because scaled_heatmap[i] pointers refer into it.
-    cudaFree(d_heatmap);
-    cudaFree(d_scaled);
+    safe_call(cudaFree(d_heatmap));
+    safe_call(cudaFree(d_scaled));
 }
 
 
@@ -297,9 +306,9 @@ void Ped::Model::applyBlurFilterCUDA() {
         for (int j = 0; j < 5; j++)
             h_weights[i * 5 + j] = weights[i][j];
 
-    cudaMalloc(&d_scaled_heatmap, numElements * sizeof(int));
-    cudaMalloc(&d_blurred_heatmap, numElements * sizeof(int));
-    cudaMalloc(&d_weights, 25 * sizeof(int));
+    safe_call(cudaMalloc(&d_scaled_heatmap, numElements * sizeof(int)));
+    safe_call(cudaMalloc(&d_blurred_heatmap, numElements * sizeof(int)));
+    safe_call(cudaMalloc(&d_weights, 25 * sizeof(int)));
 
     // Flatten the heatmap
     int *h_scaled_heatmap = new int[numElements];
@@ -313,7 +322,7 @@ void Ped::Model::applyBlurFilterCUDA() {
     dim3 gridDim((SCALED_SIZE + blockDim.x - 1) / blockDim.x, (SCALED_SIZE + blockDim.y - 1) / blockDim.y);
 
     blurHeatmapKernel<<<gridDim, blockDim>>>(d_scaled_heatmap, d_blurred_heatmap, SCALED_SIZE, d_weights);
-    
+    cudaDeviceSynchronize();
 
     // Copy the result back to host
     int *h_blurred_heatmap = new int[numElements];

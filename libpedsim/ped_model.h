@@ -96,9 +96,10 @@ namespace Ped{
 		/// Everything below here won't be relevant until Assignment 4
 		///////////////////////////////////////////////
 
-#define SIZE 512
+#define SIZE 128
 #define CELLSIZE 5
 #define SCALED_SIZE SIZE*CELLSIZE
+#define THREADSPERBLOCK 128
 
 		// The heatmap representing the density of agents
 		int ** heatmap;
