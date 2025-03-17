@@ -25,6 +25,9 @@ using namespace std;
 // The output 'd_scaled' is a 1D array for the scaled heatmap of size SCALED_SIZE x SCALED_SIZE,
 // where SCALED_SIZE = SIZE * CELLSIZE.
 
+// static cudaStream_t updateStream = nullptr;
+
+
 inline void safe_call(cudaError_t err) {
     if (err != cudaSuccess) {
         cerr << "CUDA error: " << cudaGetErrorString(err) << endl;
@@ -221,57 +224,33 @@ void Ped::Model::updateHeatmap() {
     cudaMallocAsync((void**)&d_bhm, shmSize, stream);
     cudaMallocAsync((void**)&d_agentDesiredX, agentSize, stream);
     cudaMallocAsync((void**)&d_agentDesiredY, agentSize, stream);
-    cudaStreamSynchronize(stream);
+    // cudaStreamSynchronize(stream);
 
 
 
     cudaMemcpyAsync(d_hm, hm, hmSize, cudaMemcpyHostToDevice, stream);
     cudaMemcpyAsync(d_agentDesiredX, agentDesiredX.data(), numAgents * sizeof(int), cudaMemcpyHostToDevice, stream);
     cudaMemcpyAsync(d_agentDesiredY, agentDesiredY.data(), numAgents * sizeof(int), cudaMemcpyHostToDevice, stream);
-    cudaStreamSynchronize(stream);
+    // cudaStreamSynchronize(stream);
 
     int threadsPerBlock = THREADSPERBLOCK; // divisible by 32 (warp size)
     int blocksForFade = (length+threadsPerBlock-1) / threadsPerBlock;
     int blocksForAgents = (numAgents+threadsPerBlock-1) / threadsPerBlock;
     int blocks = (scaled_length+threadsPerBlock-1) / threadsPerBlock;
-    dim3 blockDim2D(32, 32); 
-    dim3 gridDim2D((SCALED_SIZE+blockDim2D.x -1) / blockDim2D.x,(SCALED_SIZE+blockDim2D.y -1) / blockDim2D.y);
+    // dim3 blockDim2D(32, 32); 
+    // dim3 gridDim2D((SCALED_SIZE+blockDim2D.x -1) / blockDim2D.x,(SCALED_SIZE+blockDim2D.y -1) / blockDim2D.y);
     // determine the number of grids by SCALED_SIZE/blockDim2D.x and SCALED_SIZE/blockDim2D.y
     // (SCALED_SIZE + blockDim2D.x - 1) / blockDim2D.x to allow for partial blocks
-    size_t sharedMemSize = (blockDim2D.x + 4) * (blockDim2D.y + 4) * sizeof(int); // +4 for halo, 2 on each side
+    // size_t sharedMemSize = (blockDim2D.x + 4) * (blockDim2D.y + 4) * sizeof(int); // +4 for halo, 2 on each side
 
     fadeKernel<<<blocksForFade, threadsPerBlock, 0, stream>>>(d_hm, length);
-    // for (int x = 0; x < SIZE; x++) {
-    //     for (int y = 0; y < SIZE; y++) {
-    //         // heat fades
-    //         heatmap[y][x] = (int)round(heatmap[y][x] * 0.80);
-    //     }
-    // }
 
     addAgentHeatKernel<<<blocksForAgents, threadsPerBlock, 0, stream>>>(d_hm, SIZE, d_agentDesiredX, d_agentDesiredY, numAgents);
-    // // Count how many agents want to go to each location
-    // for (int i = 0; i < agents->x.size(); i++) {
-    //     int x = agents->desiredX[i];
-    //     int y = agents->desiredY[i];
-
-    //     if (x < 0 || x >= SIZE || y < 0 || y >= SIZE) {
-    //         continue;
-    //     }
-
-    //     // Intensify heat for better color results
-    //     heatmap[y][x] += 40;
-    // }
 
     limitHeatmapValueKernel<<<blocksForFade, threadsPerBlock, 0, stream>>>(d_hm, length);
-    // for (int x = 0; x < SIZE; x++) {
-    //     for (int y = 0; y < SIZE; y++) {
-    //         heatmap[y][x] = heatmap[y][x] < 255 ? heatmap[y][x] : 255;
-    //     }
-    // }
 
     scaleHeatmapKernel<<<blocks, threadsPerBlock, 0, stream>>>(d_hm, d_shm, SIZE, CELLSIZE);
-    // Scale the heatmap using existing CUDA scaling
-    // scaleHeatmapCUDA();
+
     int *d_weights;
 
     int weights[5][5] = {
@@ -290,60 +269,14 @@ void Ped::Model::updateHeatmap() {
 
     safe_call(cudaMallocAsync(&d_weights, 25 * sizeof(int), stream));
     cudaMemcpyAsync(d_weights, h_weights, 25 * sizeof(int), cudaMemcpyHostToDevice, stream);
-    cudaStreamSynchronize(stream);
 
     blurHeatmapKernel<<<blocks, threadsPerBlock, 0, stream>>>(d_shm, d_bhm, SCALED_SIZE, d_weights);
-    // Apply the parallelized CUDA blur filter
-    // applyBlurFilterCUDA();
-    // std::cout << "HEjHEJ" << endl;
-    // Copy the final heatmap and blurred heatmap back to host memory asynchronously.
-    // for(int i = 0; i < SIZE; i++){
-    cudaMemcpyAsync(heatmap[0], d_hm, hmSize, cudaMemcpyDeviceToHost, stream);
-    // }
 
-    // for(int i = 0; i < SCALED_SIZE; i++){
+    cudaMemcpyAsync(heatmap[0], d_hm, hmSize, cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(blurred_heatmap[0], d_bhm, shmSize, cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(scaled_heatmap[0], d_shm, shmSize, cudaMemcpyDeviceToHost, stream);
-    // }
-    // cudaMemcpyAsync(shm, d_shm, shmSize, cudaMemcpyDeviceToHost, stream);
-    // cudaMemcpyAsync(bhm, d_bhm, shmSize, cudaMemcpyDeviceToHost, stream);
-    // cudaMemcpyAsync(hm, d_hm, hmSize, cudaMemcpyDeviceToHost, stream);
-
-    cudaStreamSynchronize(stream);
-    // std::cout << "Byebye" << endl;
-
-
-    // for (int i = 0; i < SCALED_SIZE; i++) {
-    //     memcpy(blurred_heatmap[i], bhm + i * SCALED_SIZE, SCALED_SIZE * sizeof(int));
-    // }
-    // for (int i = 0; i < SCALED_SIZE; i++) {
-    //     memcpy(scaled_heatmap[i], shm + i * SCALED_SIZE, SCALED_SIZE * sizeof(int));
-    // }
-    // for (int i = 0; i < SIZE; i++) {
-    //     memcpy(heatmap[i], hm + i * SIZE, SIZE * sizeof(int));
-    // }
-
-    // cout << "Blurred Heatmap Color Values (Hexadecimal):" << endl;
-    // for (int i = 240; i < 250; i++) {
-    //     for (int j = 240; j < 250; j++) {
-    //         cout << heatmap[i][j] << " ";
-    //         if(blurred_heatmap[i][j] != 0){
-    //             cout << blurred_heatmap[i][j] << " ";
-    //         }
-    //         cout << endl;
-    //     }
-    // }
-
-    // for (int i = 50; i < 60; i++) {
-    //     for (int j = 70; j < 80; j++) {
-    //         cout << blurred_heatmap[i][j] << " ";
-    //     }
-    //     cout << endl;
-    // }
-
-    cudaStreamSynchronize(stream);
-    // Free device memory.
     // cudaStreamSynchronize(stream); // CPU waits for GPU to finish before CPU moves on to the next step.
+    // Free device memory.
     // printf("---------Async kernel execution complete-----------------\n");
     cudaFreeAsync(d_hm, stream);
     cudaFreeAsync(d_shm, stream);
@@ -351,111 +284,20 @@ void Ped::Model::updateHeatmap() {
     cudaFreeAsync(d_agentDesiredX, stream);
     cudaFreeAsync(d_agentDesiredY, stream);
     cudaFreeAsync(d_weights, stream);
-    cudaStreamDestroy(stream);
+    // cudaStreamDestroy(stream);
     free(hm);
     free(shm);
     free(bhm);
 }
 
+// void Ped::Model::createStream() {
+//     cudaStreamCreate(&updatestream);
+// }
 
+// void Ped::Model::syncHeatmap() {
+//     cudaStreamSynchronize(updateStream); // CPU waits for GPU to finish before CPU moves on to the next step.
+// }
 
-
-void Ped::Model::applyBlurFilterCUDA() {
-    int numElements = SCALED_SIZE * SCALED_SIZE;
-
-    int *d_scaled_heatmap, *d_blurred_heatmap, *d_weights;
-    int weights[5][5] = {
-        {1, 4, 7, 4, 1},
-        {4, 16, 26, 16, 4},
-        {7, 26, 41, 26, 7},
-        {4, 16, 26, 16, 4},
-        {1, 4, 7, 4, 1}
-    };
-
-    // Flatten the weights
-    int h_weights[25];
-    for (int i = 0; i < 5; i++)
-        for (int j = 0; j < 5; j++)
-            h_weights[i * 5 + j] = weights[i][j];
-
-    safe_call(cudaMalloc(&d_scaled_heatmap, numElements * sizeof(int)));
-    safe_call(cudaMalloc(&d_blurred_heatmap, numElements * sizeof(int)));
-    safe_call(cudaMalloc(&d_weights, 25 * sizeof(int)));
-
-    // Flatten the heatmap
-    int *h_scaled_heatmap = new int[numElements];
-    for (int i = 0; i < SCALED_SIZE; i++)
-        memcpy(h_scaled_heatmap + i * SCALED_SIZE, scaled_heatmap[i], SCALED_SIZE * sizeof(int));
-
-    cudaMemcpy(d_scaled_heatmap, h_scaled_heatmap, numElements * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_weights, h_weights, 25 * sizeof(int), cudaMemcpyHostToDevice);
-
-    dim3 blockDim(16, 16);
-    dim3 gridDim((SCALED_SIZE + blockDim.x - 1) / blockDim.x, (SCALED_SIZE + blockDim.y - 1) / blockDim.y);
-
-    blurHeatmapKernel<<<gridDim, blockDim>>>(d_scaled_heatmap, d_blurred_heatmap, SCALED_SIZE, d_weights);
-    cudaDeviceSynchronize();
-
-    // Copy the result back to host
-    int *h_blurred_heatmap = new int[numElements];
-    cudaMemcpy(h_blurred_heatmap, d_blurred_heatmap, numElements * sizeof(int), cudaMemcpyDeviceToHost);
-    cudaDeviceSynchronize();
-
-    for (int i = 0; i < SCALED_SIZE; i++) {
-        memcpy(blurred_heatmap[i], h_blurred_heatmap + i * SCALED_SIZE, SCALED_SIZE * sizeof(int));
-    }
-
-    delete[] h_scaled_heatmap;
-    delete[] h_blurred_heatmap;
-
-    cudaFree(d_scaled_heatmap);
-    cudaFree(d_blurred_heatmap);
-    cudaFree(d_weights);
-}
-
-
-void Ped::Model::scaleHeatmapCUDA() {
-    // Assume SIZE and CELLSIZE are defined, and SCALED_SIZE = SIZE * CELLSIZE.
-    int numOrig = SIZE * SIZE;
-    int numScaled = SCALED_SIZE * SCALED_SIZE;
-
-    // Flatten the 2D heatmap into a contiguous array.
-    int *hm_flat = (int*)malloc(numOrig * sizeof(int));
-    for (int i = 0; i < SIZE; i++) {
-        memcpy(hm_flat + i * SIZE, heatmap[i], SIZE * sizeof(int));
-    }
-
-    // Allocate GPU memory.
-    int *d_heatmap, *d_scaled;
-    safe_call(cudaMalloc((void**)&d_heatmap, numOrig * sizeof(int)));
-    safe_call(cudaMalloc((void**)&d_scaled, numScaled * sizeof(int)));
-
-    // Copy the original heatmap to device.
-    // cudaMemcpy(d_heatmap, hm_flat, numOrig * sizeof(int), cudaMemcpyHostToDevice);
-    safe_call(cudaMemcpy(d_heatmap, hm_flat, numOrig * sizeof(int), cudaMemcpyHostToDevice));
-
-
-    // Launch the scaling kernel.
-    int threadsPerBlock = THREADSPERBLOCK;
-    int blocks = (numScaled + threadsPerBlock - 1) / threadsPerBlock;
-    scaleHeatmapKernel<<<blocks, threadsPerBlock>>>(d_heatmap, d_scaled, SIZE, CELLSIZE);
-    cudaDeviceSynchronize();
-
-    // Allocate a contiguous host array for the scaled heatmap.
-    int *shm_flat = (int*)malloc(numScaled * sizeof(int));
-    safe_call(cudaMemcpy(shm_flat, d_scaled, numScaled * sizeof(int), cudaMemcpyDeviceToHost));
-
-    cudaDeviceSynchronize();
-
-    // Reassign the 'scaled_heatmap' pointer-to-pointers using the flat array.
-    // (Note: You must ensure that later code uses the same layout.)
-    for (int i = 0; i < SCALED_SIZE; i++) {
-        scaled_heatmap[i] = shm_flat + i * SCALED_SIZE;
-    }
-
-    // Free temporary memory.
-    free(hm_flat);
-    // Do not free shm_flat here because scaled_heatmap[i] pointers refer into it.
-    safe_call(cudaFree(d_heatmap));
-    safe_call(cudaFree(d_scaled));
-}
+// void Ped::Model::destroyStream() {
+//     cudaStreamDestroy(updateStream);
+// }

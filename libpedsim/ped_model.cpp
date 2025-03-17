@@ -18,8 +18,8 @@
 #include <cmath>
 #include <immintrin.h>
 #include <xmmintrin.h>
-#include <mutex>
-// #include "cuda_runtime.h"	
+#include <mutex>	
+
 // std::mutex regionMutex;  // Global mutex for region updates
 
 #ifndef NOCDUA
@@ -139,20 +139,9 @@ void Ped::Model::tick(){
 	else if (implementation == OMPMOVE) {		
 
 		omp_set_num_threads(8);
+		
 		computeNext(0, agents->x.size());
-
-		// auto total_start = std::chrono::high_resolution_clock::now();
-
-		// Create CUDA stream for asynchronous execution
-		// cudaStream_t stream;
-		// cudaStreamCreate(&stream);
-	
-		// // Start GPU timing with CUDA stream
-		// cudaEvent_t start, stop;
-		// cudaEventCreate(&start);
-		// cudaEventCreate(&stop);
-		// cudaEventRecord(start, stream);
-
+		
 		updateHeatmap();
 		
 		auto start_cpu = std::chrono::high_resolution_clock::now();
@@ -163,40 +152,6 @@ void Ped::Model::tick(){
 				move(agentIndex, region, j);
 			}
 		}
-
-		// Ensure GPU tasks complete
-		// cudaEventRecord(stop, stream);
-		// cudaEventSynchronize(stop);
-	
-		// float gpuTime = 0;
-		// cudaEventElapsedTime(&gpuTime, start, stop);
-		// std::cout << "GPU Time: " << gpuTime << " ms" << std::endl;
-	
-		// cudaEventDestroy(start);
-		// cudaEventDestroy(stop);
-		// cudaStreamDestroy(stream);
-
-		// auto stop_cpu = std::chrono::high_resolution_clock::now();
-		// auto total_stop = std::chrono::high_resolution_clock::now();
-
-		// auto duration_cpu = std::chrono::duration_cast<std::chrono::milliseconds>(stop_cpu - start_cpu);
-		// std::cout << "CPU Time: " << duration_cpu.count() << " ms" << std::endl;
-
-		
-		// auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(total_stop - total_start);
-		// std::cout << "Total Time: " << total_duration.count() << " ms" << std::endl;
-
-		// float totalTimeMs = static_cast<float>(total_duration.count());
-		// float cpuTimeMs = static_cast<float>(duration_cpu.count());
-		// float gpuTimeMs = gpuTime;
-
-		// if (totalTimeMs < (cpuTimeMs + gpuTimeMs)) {
-		// 	std::cout << "Parallel execution confirmed! (Total Time < CPU + GPU Time)" << std::endl;
-		// 	std::cout << "Difference: " << (cpuTimeMs + gpuTimeMs - totalTimeMs) << " ms" << std::endl;
-		// } else {
-		// 	std::cout << "No parallel execution. (Total Time >= CPU + GPU Time)" << std::endl;
-		// 	std::cout << "Difference: " << (cpuTimeMs + gpuTimeMs - totalTimeMs) << " ms" << std::endl;
-		// }
 	}
 	
 	else if (implementation == OMPSIMDMOVE){

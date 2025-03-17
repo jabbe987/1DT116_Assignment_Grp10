@@ -112,12 +112,15 @@ namespace Ped{
 
 		void setupHeatmapSeq();
 		void updateHeatmapSeq();
-
-
+		
+		
 		void setupHeatmap();
 		void updateHeatmap();
-		void scaleHeatmapCUDA();
-		void applyBlurFilterCUDA();
+		// void createStream();
+		// void destroyStream();
+		// void syncHeatmap();
+		// void scaleHeatmapCUDA();
+		// void applyBlurFilterCUDA();
 
 		
 
