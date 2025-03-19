@@ -11,6 +11,9 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <cstdio>
+#include <thread>
+#include <chrono>
 #include <cmath>
 using namespace std;
 
@@ -89,35 +92,77 @@ __global__ void scaleHeatmapKernel(const int *d_hm, int *d_shm, int size, int ce
     }
 }
 
-// 1D blur kernel: No shared memory tiles, each thread handles one pixel
-__global__ void blurHeatmapKernel(const int* d_in, int* d_out, int width, const int* d_weights)
-{
-    // Compute the global 1D index
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void blurHeatmapKernel(const int* d_in, int* d_out, int width, const int* d_weights) {
+    // Declare dynamically allocated shared memory
+    extern __shared__ int smem[];
 
-    // Make sure we don't read/write out of bounds
-    int total = width * width;
-    if (idx >= total) return;
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    int idx = y * width + x;
 
-    // Convert 1D index -> (x, y)
-    int x = idx % width;
-    int y = idx / width;
+    // Convert the 1D shared memory into a 2D array
+    int(*sharedMemory)[32 + 4] = (int(*)[32 + 4])smem;
 
-    // Only blur if we can safely access a 5×5 region around (x, y)
+    if (x >= width || y >= width) return;
+
+    // Load data into shared memory (handling halo regions)
+    sharedMemory[threadIdx.y + 2][threadIdx.x + 2] = d_in[idx];
+
+    // Load halo regions (left, right, top, bottom)
+    if (threadIdx.x < 2) {
+        if (x >= 2) sharedMemory[threadIdx.y + 2][threadIdx.x] = d_in[idx - 2];   
+        if (x + blockDim.x < width) sharedMemory[threadIdx.y + 2][threadIdx.x + blockDim.x + 2] = d_in[idx + blockDim.x]; 
+    }
+    if (threadIdx.y < 2) {
+        if (y >= 2) sharedMemory[threadIdx.y][threadIdx.x + 2] = d_in[idx - 2 * width];  
+        if (y + blockDim.y < width) sharedMemory[threadIdx.y + blockDim.y + 2][threadIdx.x + 2] = d_in[idx + blockDim.y * width]; 
+    }
+
+    // Synchronize before accessing shared memory
+    __syncthreads();
+
+    // Apply 5x5 Gaussian blur using shared memory
     if (x >= 2 && x < width - 2 && y >= 2 && y < width - 2) {
         int sum = 0;
-        // Accumulate weighted sum from 5×5 neighborhood
         for (int dy = -2; dy <= 2; dy++) {
             for (int dx = -2; dx <= 2; dx++) {
-                int neighborVal = d_in[(y + dy) * width + (x + dx)];
-                int weight      = d_weights[(dy + 2) * 5 + (dx + 2)];
-                sum += neighborVal * weight;
+                int weight = d_weights[(dy + 2) * 5 + (dx + 2)];
+                sum += sharedMemory[threadIdx.y + 2 + dy][threadIdx.x + 2 + dx] * weight;
             }
         }
-        // Store ARGB result (red channel, alpha == sum/273)
         d_out[idx] = 0x00FF0000 | ((sum / 273) << 24);
     }
 }
+
+// // 1D blur kernel: No shared memory tiles, each thread handles one pixel
+// __global__ void blurHeatmapKernel(const int* d_in, int* d_out, int width, const int* d_weights)
+// {
+//     // Compute the global 1D index
+//     int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+//     // Make sure we don't read/write out of bounds
+//     int total = width * width;
+//     if (idx >= total) return;
+
+//     // Convert 1D index -> (x, y)
+//     int x = idx % width;
+//     int y = idx / width;
+
+//     // Only blur if we can safely access a 5×5 region around (x, y)
+//     if (x >= 2 && x < width - 2 && y >= 2 && y < width - 2) {
+//         int sum = 0;
+//         // Accumulate weighted sum from 5×5 neighborhood
+//         for (int dy = -2; dy <= 2; dy++) {
+//             for (int dx = -2; dx <= 2; dx++) {
+//                 int neighborVal = d_in[(y + dy) * width + (x + dx)];
+//                 int weight      = d_weights[(dy + 2) * 5 + (dx + 2)];
+//                 sum += neighborVal * weight;
+//             }
+//         }
+//         // Store ARGB result (red channel, alpha == sum/273)
+//         d_out[idx] = 0x00FF0000 | ((sum / 273) << 24);
+//     }
+// }
 
 __global__ void initializeHeatmap(int *d_hm, int *d_shm, int *d_bhm, int length, int scaled_length) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -185,6 +230,7 @@ void Ped::Model::setupHeatmap() {
 void Ped::Model::updateHeatmap() {
     cudaStream_t stream;
     cudaStreamCreate(&stream);
+
     int length = SIZE * SIZE;
     int scaled_length = SCALED_SIZE * SCALED_SIZE;
     int numAgents = agents->x.size();
@@ -214,34 +260,28 @@ void Ped::Model::updateHeatmap() {
         memcpy(hm + i * SIZE, heatmap[i], SIZE * sizeof(int));
     }
 
-
     int *shm = (int*)malloc(shmSize);
     int *bhm = (int*)malloc(shmSize);
-
 
     cudaMallocAsync((void**)&d_hm, hmSize, stream);
     cudaMallocAsync((void**)&d_shm, shmSize, stream);
     cudaMallocAsync((void**)&d_bhm, shmSize, stream);
     cudaMallocAsync((void**)&d_agentDesiredX, agentSize, stream);
     cudaMallocAsync((void**)&d_agentDesiredY, agentSize, stream);
-    // cudaStreamSynchronize(stream);
-
-
 
     cudaMemcpyAsync(d_hm, hm, hmSize, cudaMemcpyHostToDevice, stream);
     cudaMemcpyAsync(d_agentDesiredX, agentDesiredX.data(), numAgents * sizeof(int), cudaMemcpyHostToDevice, stream);
     cudaMemcpyAsync(d_agentDesiredY, agentDesiredY.data(), numAgents * sizeof(int), cudaMemcpyHostToDevice, stream);
-    // cudaStreamSynchronize(stream);
 
     int threadsPerBlock = THREADSPERBLOCK; // divisible by 32 (warp size)
     int blocksForFade = (length+threadsPerBlock-1) / threadsPerBlock;
     int blocksForAgents = (numAgents+threadsPerBlock-1) / threadsPerBlock;
     int blocks = (scaled_length+threadsPerBlock-1) / threadsPerBlock;
-    // dim3 blockDim2D(32, 32); 
-    // dim3 gridDim2D((SCALED_SIZE+blockDim2D.x -1) / blockDim2D.x,(SCALED_SIZE+blockDim2D.y -1) / blockDim2D.y);
+    dim3 blockDim2D(32, 32); 
+    dim3 gridDim2D((SCALED_SIZE+blockDim2D.x -1) / blockDim2D.x,(SCALED_SIZE+blockDim2D.y -1) / blockDim2D.y);
     // determine the number of grids by SCALED_SIZE/blockDim2D.x and SCALED_SIZE/blockDim2D.y
     // (SCALED_SIZE + blockDim2D.x - 1) / blockDim2D.x to allow for partial blocks
-    // size_t sharedMemSize = (blockDim2D.x + 4) * (blockDim2D.y + 4) * sizeof(int); // +4 for halo, 2 on each side
+    size_t sharedMemSize = (blockDim2D.x + 4) * (blockDim2D.y + 4) * sizeof(int); // +4 for halo, 2 on each side
 
     fadeKernel<<<blocksForFade, threadsPerBlock, 0, stream>>>(d_hm, length);
 
@@ -270,11 +310,15 @@ void Ped::Model::updateHeatmap() {
     safe_call(cudaMallocAsync(&d_weights, 25 * sizeof(int), stream));
     cudaMemcpyAsync(d_weights, h_weights, 25 * sizeof(int), cudaMemcpyHostToDevice, stream);
 
-    blurHeatmapKernel<<<blocks, threadsPerBlock, 0, stream>>>(d_shm, d_bhm, SCALED_SIZE, d_weights);
+    // blurHeatmapKernel<<<blocks, threadsPerBlock, 0, stream>>>(d_shm, d_bhm, SCALED_SIZE, d_weights);
+
+    // Launch the blur kernel with shared memory allocation
+    blurHeatmapKernel<<<gridDim2D, blockDim2D, sharedMemSize, stream>>>(d_shm, d_bhm, SCALED_SIZE, d_weights);
 
     cudaMemcpyAsync(heatmap[0], d_hm, hmSize, cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(blurred_heatmap[0], d_bhm, shmSize, cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(scaled_heatmap[0], d_shm, shmSize, cudaMemcpyDeviceToHost, stream);
+
     // cudaStreamSynchronize(stream); // CPU waits for GPU to finish before CPU moves on to the next step.
     // Free device memory.
     // printf("---------Async kernel execution complete-----------------\n");
@@ -290,14 +334,13 @@ void Ped::Model::updateHeatmap() {
     free(bhm);
 }
 
-// void Ped::Model::createStream() {
-//     cudaStreamCreate(&updatestream);
-// }
-
-// void Ped::Model::syncHeatmap() {
-//     cudaStreamSynchronize(updateStream); // CPU waits for GPU to finish before CPU moves on to the next step.
-// }
-
-// void Ped::Model::destroyStream() {
-//     cudaStreamDestroy(updateStream);
+// void Ped::Model::syncHeatmap(HeatmapResources &res) {
+//     cudaStreamSynchronize(res.stream);
+//     cudaFree(res.d_hm);
+//     cudaFree(res.d_shm);
+//     cudaFree(res.d_bhm);
+//     cudaFree(res.d_agentDesiredX);
+//     cudaFree(res.d_agentDesiredY);
+//     cudaFree(res.d_weights);
+//     cudaStreamDestroy(res.stream);
 // }

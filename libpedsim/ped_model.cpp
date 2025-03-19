@@ -135,14 +135,15 @@ void Ped::Model::tick(){
 
 		forceMove();
 	}
-    
 	else if (implementation == OMPMOVE) {		
 
 		omp_set_num_threads(8);
 		
 		computeNext(0, agents->x.size());
 		
+		auto start_total = std::chrono::high_resolution_clock::now();
 		updateHeatmap();
+		
 		
 		auto start_cpu = std::chrono::high_resolution_clock::now();
 		#pragma omp parallel for schedule(static)
@@ -151,7 +152,23 @@ void Ped::Model::tick(){
 				int agentIndex = agents->regions[region][j];  
 				move(agentIndex, region, j);
 			}
-		}
+		};
+
+		auto end_total = std::chrono::high_resolution_clock::now();
+		
+		auto total_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_total-start_total).count();
+		auto cpu_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_total-start_cpu).count();
+
+		// std::cout << "CPU Execution Time: " << cpu_time << " ms" << std::endl;
+		// std::cout << "Total Time: " << total_time << "ms" << std::endl;
+		
+		// std::cout << "Total Time: " << total_time << "ms" << std::endl;
+
+
+		// std::cout << "GPU Execution Time: " << gpu_time << " ms" << std::endl;
+
+
+		// std::cout << "MOVE LOOP FINISHED\n" << std::endl;
 	}
 	
 	else if (implementation == OMPSIMDMOVE){
